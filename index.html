@@ -1,0 +1,3303 @@
+<!DOCTYPE html>
+<!--
+  NEURO DRIVE v2.0 — 스스로 운전을 배우는 신경망
+  Deep Q-Network(DQN)를 외부 라이브러리 없이 순수 JavaScript로 구현한
+  강화학습 레이싱 게임. 단일 HTML 파일로 동작. (?selftest 로 자가 진단)
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEURO DRIVE — 스스로 운전을 배우는 신경망</title>
+<meta name="description" content="신경망이 눈앞에서 운전을 배웁니다. 라이브러리 없이 순수 JS로 구현한 Deep Q-Network 강화학습 레이싱 게임 — 훈련하고, 실험하고, 당신의 AI와 대결하세요.">
+<meta property="og:title" content="NEURO DRIVE — 스스로 운전을 배우는 신경망">
+<meta property="og:description" content="수만 번의 충돌 끝에 완주까지 — DQN 강화학습을 눈으로 보고, 직접 키운 AI와 레이스하세요.">
+<meta name="theme-color" content="#12141a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #12141a; --panel: #1b1e27; --panel2: #242834;
+    --line: #333948; --text: #e8ecf4; --dim: #9aa3b5;
+    --orange: #ff9f43; --orange2: #e8842a; --blue: #54a0ff;
+    --green: #2ecc71; --red: #ff6b6b; --gold: #feca57; --purple: #a29bfe;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    min-height: 100vh; padding: 14px;
+  }
+  h1 { font-size: 19px; letter-spacing: .3px; white-space: nowrap; }
+  h1 small { color: var(--dim); font-size: 12px; font-weight: 400; margin-left: 8px; }
+  @media (max-width: 720px) { h1 small { display: none; } }
+  .topbar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
+  }
+  .tabs { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .tab {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--dim);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .tab.on { background: var(--orange); border-color: var(--orange); color: #241505; }
+  .tab.icon { padding: 7px 9px; }
+  .statbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 7px 12px; font-size: 13px; color: var(--dim);
+  }
+  .stat b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .stat .hl { color: var(--gold); }
+  .epsbar { display: inline-block; width: 70px; height: 8px; background: var(--panel2);
+    border-radius: 4px; overflow: hidden; vertical-align: middle; margin-left: 6px; }
+  .epsbar i { display: block; height: 100%; background: var(--purple); border-radius: 4px; }
+  .grid {
+    display: grid; gap: 12px;
+    grid-template-columns: 252px minmax(0,1fr) 316px;
+    grid-template-areas: "left center right";
+    align-items: start;
+  }
+  .gLeft { grid-area: left; } .gCenter { grid-area: center; } .gRight { grid-area: right; }
+  @media (max-width: 1080px) {
+    .grid { grid-template-columns: 1fr; grid-template-areas: "center" "left" "right"; }
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 13px; margin-bottom: 12px;
+  }
+  .card h2 { font-size: 12px; color: var(--dim); margin-bottom: 10px; letter-spacing: .8px; text-transform: uppercase; }
+  input[type=range] { width: 100%; accent-color: var(--orange); }
+  .slider { margin-bottom: 12px; }
+  .slider .lab { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 3px; }
+  .slider .lab b { color: var(--gold); font-variant-numeric: tabular-nums; }
+  button {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  button:hover { border-color: var(--dim); }
+  button.primary {
+    background: linear-gradient(135deg, var(--orange), var(--orange2));
+    border: 0; color: #241505; width: 100%; padding: 11px; font-size: 15px;
+  }
+  button.small { padding: 6px 10px; font-size: 12px; }
+  button.preset { width: 100%; margin-bottom: 6px; text-align: left; }
+  button.preset.on { border-color: var(--orange); color: var(--orange); }
+  .btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .btnrow button { flex: 1; white-space: nowrap; }
+  select {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 7px; font-size: 13px; width: 100%;
+  }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); cursor: pointer; margin-top: 10px; }
+  .check input { accent-color: var(--orange); width: 16px; height: 16px; }
+  #mainCanvas { width: 100%; display: block; border-radius: 12px; background: #0d0f14; border: 1px solid var(--line); touch-action: none; }
+  .canvasWrap { position: relative; }
+  .raceHud {
+    position: absolute; top: 12px; left: 12px; background: rgba(18,20,26,.85);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px;
+    font-size: 13px; line-height: 1.8; display: none; pointer-events: none;
+  }
+  .raceHud b { color: var(--gold); font-variant-numeric: tabular-nums; }
+  .countdown {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: 110px; font-weight: 900; color: var(--gold); text-shadow: 0 4px 30px rgba(0,0,0,.8);
+    pointer-events: none;
+  }
+  .editHint {
+    position: absolute; bottom: 12px; left: 12px; right: 12px; text-align: center;
+    background: rgba(18,20,26,.85); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; font-size: 13px; color: var(--dim); display: none; pointer-events: none;
+  }
+  .touchBtns {
+    position: absolute; left: 0; right: 0; bottom: 12px; display: none;
+    justify-content: space-between; padding: 0 14px; pointer-events: none;
+  }
+  .touchBtns button {
+    pointer-events: auto; width: 86px; height: 86px; border-radius: 50%;
+    font-size: 32px; opacity: .55; background: var(--panel2); border: 2px solid var(--dim);
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  canvas.viz { width: 100%; display: block; background: var(--panel2); border-radius: 10px; }
+  .notes { max-height: 240px; overflow-y: auto; font-size: 12.5px; line-height: 1.6; }
+  .note { border-left: 3px solid var(--orange); background: var(--panel2); border-radius: 0 8px 8px 0;
+    padding: 6px 9px; margin-bottom: 6px; }
+  .note.sys { border-color: var(--blue); }
+  .note.win { border-color: var(--green); }
+  .note .t { color: var(--dim); font-size: 11px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px;
+  }
+  .modal {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 24px; max-width: 640px; max-height: 86vh; overflow-y: auto;
+    line-height: 1.75; font-size: 14px; width: min(640px, 100%);
+  }
+  .modal h2 { font-size: 19px; color: var(--gold); margin-bottom: 12px; }
+  .modal h3 { font-size: 15px; color: var(--orange); margin: 14px 0 6px; }
+  .modal table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  .modal th, .modal td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  .modal th { color: var(--gold); background: var(--panel2); white-space: nowrap; }
+  .modal td:first-child { white-space: nowrap; color: var(--orange); font-weight: 700; }
+  .mission { display: flex; gap: 10px; align-items: center; background: var(--panel2);
+    border-radius: 10px; padding: 9px 12px; margin-bottom: 7px; }
+  .mission .ic { font-size: 22px; filter: grayscale(1); opacity: .45; }
+  .mission.done .ic { filter: none; opacity: 1; }
+  .mission .nm { font-weight: 700; font-size: 13px; }
+  .mission.done .nm { color: var(--gold); }
+  .mission .ds { font-size: 12px; color: var(--dim); }
+  .mission .chk { margin-left: auto; color: var(--green); font-weight: 900; visibility: hidden; }
+  .mission.done .chk { visibility: visible; }
+  .setrow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--panel2); border-radius: 10px; padding: 10px 13px; margin-bottom: 8px; font-size: 13px; }
+  .setrow small { display: block; color: var(--dim); font-size: 11.5px; }
+  .switch { position: relative; width: 42px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch i { position: absolute; inset: 0; background: var(--line); border-radius: 12px; cursor: pointer; transition: .2s; }
+  .switch i::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--dim); top: 3px; left: 3px; transition: .2s; }
+  .switch input:checked + i { background: var(--orange2); }
+  .switch input:checked + i::after { background: #fff; left: 21px; }
+  .hidden { display: none !important; }
+  .kbd { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 7px; font-size: 12px; font-family: monospace; }
+  .divider { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+  .muted { color: var(--dim); font-size: 12px; line-height: 1.6; }
+  .rec { font-size: 12.5px; color: var(--dim); background: var(--panel2); border-radius: 8px;
+    padding: 8px 11px; margin-top: 10px; line-height: 1.8; }
+  .rec b { color: var(--gold); font-variant-numeric: tabular-nums; }
+  .labbar {
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(90deg, #2a2440, var(--panel));
+    border: 1px solid var(--purple); border-radius: 10px;
+    padding: 9px 14px; margin-bottom: 12px; font-size: 13px; line-height: 1.5;
+  }
+  .labbar b { color: var(--purple); }
+  .lab {
+    background: var(--panel2); border-radius: 10px; padding: 12px 14px; margin-bottom: 9px;
+    border-left: 3px solid var(--purple);
+  }
+  .lab .hd { display: flex; align-items: center; gap: 8px; }
+  .lab .hd .ti { font-weight: 700; font-size: 14px; }
+  .lab .hd .st { margin-left: auto; flex: none; }
+  .lab .st.done { color: var(--green); font-weight: 700; font-size: 13px; }
+  .lab .why { font-size: 12.5px; color: var(--dim); margin-top: 6px; line-height: 1.6; }
+  .lab .sum { font-size: 12.5px; color: var(--gold); margin-top: 6px; line-height: 1.6;
+    background: rgba(254,202,87,.06); border-radius: 8px; padding: 7px 10px; }
+  #toasts { position: fixed; top: 14px; right: 14px; z-index: 60; display: flex;
+    flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast {
+    background: var(--panel); border: 1px solid var(--gold); border-radius: 10px;
+    padding: 10px 15px; font-size: 13px; box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    animation: tin .3s ease-out; max-width: 300px;
+  }
+  .toast b { color: var(--gold); }
+  .toast.fade { opacity: 0; transition: opacity .5s; }
+  @keyframes tin { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  /* 게임 필 */
+  #introOverlay { background: rgba(5, 6, 10, .42); backdrop-filter: blur(2px); }
+  #introOverlay .modal { background: rgba(27, 30, 39, .92); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .logo {
+    font-size: 38px; font-weight: 900; letter-spacing: 3px; text-align: center; line-height: 1.2;
+    background: linear-gradient(92deg, #ff9f43, #feca57, #ff6b6b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: logoPulse 2.6s ease-in-out infinite;
+  }
+  @keyframes logoPulse {
+    0%, 100% { filter: drop-shadow(0 0 10px rgba(255,159,67,.35)); }
+    50% { filter: drop-shadow(0 0 24px rgba(255,159,67,.75)); }
+  }
+  .logoSub { text-align: center; color: var(--dim); font-size: 13px; margin: 4px 0 14px; letter-spacing: .5px; }
+  button { transition: transform .08s ease, border-color .15s ease, filter .15s ease; }
+  button:active { transform: scale(.96); }
+  button.primary:hover { filter: brightness(1.1); }
+  .chip { display: inline-block; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 16px; padding: 4px 12px; font-size: 12.5px; margin: 2px; }
+  .chip a { color: var(--red); cursor: pointer; margin-left: 4px; text-decoration: none; }
+  .tourSpot { position: fixed; z-index: 70; border: 2px solid var(--gold); border-radius: 12px;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.74); pointer-events: none; transition: all .25s ease; }
+  .tourCard { position: fixed; z-index: 71; background: var(--panel); border: 1px solid var(--gold);
+    border-radius: 12px; padding: 14px 16px; max-width: 290px; font-size: 13px; line-height: 1.6;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .tourCard h3 { color: var(--gold); font-size: 14px; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🏎️ NEURO DRIVE <small>보고 · 실험하고 · 대결하는 AI 리터러시 실험실 — DQN from scratch</small></h1>
+  <div class="tabs">
+    <button class="tab on" data-mode="train">🧠 훈련</button>
+    <button class="tab" data-mode="edit">✏️ 트랙</button>
+    <button class="tab" data-mode="race">🏁 대결</button>
+    <button class="tab icon" id="btnLabs" title="실험실">🔬</button>
+    <button class="tab icon" id="btnBench" title="알고리즘 벤치마크">⚗️</button>
+    <button class="tab icon" id="btnMissions" title="도전과제">🎯</button>
+    <button class="tab icon" id="btnGlossary" title="개념 도감">📖</button>
+    <button class="tab icon" id="btnSound" title="소리">🔊</button>
+    <button class="tab icon" id="btnSettings" title="설정">⚙️</button>
+  </div>
+</div>
+
+<div class="statbar">
+  <div class="stat">🗺 <b id="stTrack">클래식</b></div>
+  <div class="stat">에피소드 <b id="stEp">0</b></div>
+  <div class="stat">총 스텝 <b id="stSteps">0</b></div>
+  <div class="stat">탐험률 ε <b id="stEps">1.00</b><span class="epsbar"><i id="stEpsBar" style="width:100%"></i></span></div>
+  <div class="stat">경험 버퍼 <b id="stBuf">0</b></div>
+  <div class="stat">최근 20판 평균 <b id="stAvg" class="hl">0.00</b> 바퀴</div>
+  <div class="stat">최고 기록 <b id="stBest" class="hl">0.00</b> 바퀴</div>
+  <div class="stat">TD 오차 <b id="stLoss">-</b></div>
+</div>
+
+<div class="labbar" id="labBar" style="display:none">
+  <span id="labBarText"></span>
+  <button class="small" id="btnLabStop" style="margin-left:auto;flex:none">실험 중단</button>
+</div>
+
+<div class="grid">
+  <!-- ══════════ 왼쪽: 컨트롤 ══════════ -->
+  <div class="gLeft">
+    <div id="panelTrain">
+      <div class="card">
+        <h2>시뮬레이션</h2>
+        <button class="primary" id="btnRun">▶ 학습 시작</button>
+        <div class="muted" style="margin:10px 0 4px">학습 속도</div>
+        <select id="selSpeed">
+          <option value="1">1× (실시간)</option>
+          <option value="4">4×</option>
+          <option value="20" selected>20×</option>
+          <option value="100">100×</option>
+          <option value="max">MAX (최대 속도)</option>
+        </select>
+        <label class="check"><input type="checkbox" id="chkDemo"> 시범 주행 (탐험·학습 끄기)</label>
+        <label class="check"><input type="checkbox" id="chkHeat"> 🗺 가치 지도 (AI의 머릿속)</label>
+        <div class="muted hidden" id="heatHint" style="margin-top:6px">
+          트랙 위 색 = AI가 매긴 그 지점의 가치 V(s).
+          <span style="color:var(--green)">초록</span>=좋음, <span style="color:var(--red)">빨강</span>=나쁨.
+          학습이 진행되며 지도가 선명해집니다.
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>하이퍼파라미터</h2>
+        <div class="slider">
+          <div class="lab"><span>학습률 (learning rate)</span><b id="labLr">0.0010</b></div>
+          <input type="range" id="slLr" min="0" max="1" step="0.01" value="0.5">
+        </div>
+        <div class="slider">
+          <div class="lab"><span>할인율 γ</span><b id="labGamma">0.980</b></div>
+          <input type="range" id="slGamma" min="0.90" max="0.995" step="0.005" value="0.98">
+        </div>
+        <div class="slider">
+          <div class="lab"><span>ε 반감기</span><b id="labEps">8천 스텝</b></div>
+          <input type="range" id="slEps" min="2" max="40" step="1" value="8">
+        </div>
+        <label class="check"><input type="checkbox" id="chkDouble" checked> Double DQN (과대평가 방지)</label>
+        <label class="check"><input type="checkbox" id="chkPER"> PER — 우선순위 경험 재현</label>
+        <div class="muted" style="margin:10px 0 4px">n-step 리턴</div>
+        <select id="selNstep">
+          <option value="1" selected>1-step (기본)</option>
+          <option value="3">3-step</option>
+          <option value="5">5-step</option>
+        </select>
+        <button class="small" id="btnDefaults" style="width:100%;margin-top:10px">권장값 복원</button>
+      </div>
+
+      <div class="card">
+        <h2>보상 설계 <span style="color:var(--purple)">← 직접 실험!</span></h2>
+        <div class="slider">
+          <div class="lab"><span>전진 보상</span><b id="labRProg">1.0</b></div>
+          <input type="range" id="slRProg" min="0" max="3" step="0.1" value="1">
+        </div>
+        <div class="slider">
+          <div class="lab"><span>속도 보너스</span><b id="labRSpd">0.0</b></div>
+          <input type="range" id="slRSpd" min="0" max="5" step="0.1" value="0">
+        </div>
+        <div class="slider">
+          <div class="lab"><span>충돌 페널티</span><b id="labRCrash">3.0</b></div>
+          <input type="range" id="slRCrash" min="0" max="10" step="0.5" value="3">
+        </div>
+        <label class="check"><input type="checkbox" id="chkSparse"> 🌵 희소 보상 모드</label>
+        <div class="muted">전진 보상을 0으로, 속도 보너스만 크게 주면? — <b style="color:var(--purple)">보상 해킹</b>.
+        🌵 모드는 1/5바퀴 체크포인트에서만 보상을 줘 <b>탐험 문제</b>를 극한으로 만듭니다.</div>
+      </div>
+
+      <div class="card">
+        <h2>모델</h2>
+        <div class="btnrow">
+          <button class="small" id="btnSave">💾 저장</button>
+          <button class="small" id="btnLoad">📂 열기</button>
+          <button class="small" id="btnReset">🗑 초기화</button>
+        </div>
+        <div class="btnrow" style="margin-top:6px">
+          <button class="small" id="btnExport">⬇ 파일로 내보내기</button>
+          <button class="small" id="btnImport">⬆ 파일 가져오기</button>
+        </div>
+        <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
+        <button class="small hidden" id="btnPretrained" style="width:100%;margin-top:8px;border-color:var(--gold);color:var(--gold)">🎓 사전 학습 모델 체험</button>
+      </div>
+    </div>
+
+    <div id="panelEdit" class="hidden">
+      <div class="card">
+        <h2>트랙 선택</h2>
+        <button class="preset" data-track="oval">🟢 초급 · 오벌</button>
+        <button class="preset on" data-track="classic">🟡 중급 · 클래식</button>
+        <button class="preset" data-track="serpent">🔴 고급 · 서펜트</button>
+        <button class="preset" id="btnDaily" style="border-color:var(--gold)">📅 오늘의 트랙 <span class="muted">· 매일 새 서킷</span></button>
+      </div>
+      <div class="card">
+        <h2>나만의 트랙 그리기</h2>
+        <div class="muted" style="margin-bottom:10px">
+          캔버스 위에서 마우스(또는 손가락)를 <b>드래그해 한 붓으로 큰 원을 그리듯</b> 트랙을 그리세요.
+          시작점 근처에서 놓으면 자동으로 이어집니다.
+        </div>
+        <div class="slider">
+          <div class="lab"><span>트랙 폭</span><b id="labWidth">56px</b></div>
+          <input type="range" id="slWidth" min="46" max="80" step="2" value="56">
+        </div>
+        <div class="btnrow">
+          <button class="small" id="btnTrackCopy">📤 트랙 코드 복사</button>
+          <button class="small" id="btnTrackPaste">📥 코드 붙여넣기</button>
+        </div>
+        <hr class="divider">
+        <div class="muted">
+          💡 <b style="color:var(--gold)">일반화 실험</b>: 학습된 모델을 유지한 채 새 트랙을 적용하면,
+          AI가 처음 보는 트랙에서도 달릴 수 있는지 확인할 수 있습니다.
+        </div>
+      </div>
+    </div>
+
+    <div id="panelRace" class="hidden">
+      <div class="card">
+        <h2>AI와 대결</h2>
+        <div class="muted" style="margin-bottom:10px">
+          지금까지 학습한 AI(🟠)와 3바퀴 레이스!<br>
+          조향: <span class="kbd">←</span> <span class="kbd">→</span> / <span class="kbd">A</span> <span class="kbd">D</span> / 화면 버튼<br>
+          가속은 자동 (AI와 동일 조건). 충돌하면 잠시 기절합니다.
+        </div>
+        <button class="primary" id="btnRace">🏁 레이스 시작</button>
+        <div class="rec" id="recBox">이 트랙 최고 랩 기록이 여기 표시됩니다.</div>
+        <div class="muted" style="margin-top:10px">
+          AI가 아직 서툴다면 먼저 훈련시키거나, <b style="color:var(--gold)">사전 학습 모델</b>을 불러오세요.
+        </div>
+      </div>
+      <div class="card">
+        <h2>⚔️ AI vs AI 관전 대결</h2>
+        <div class="muted" style="margin-bottom:10px">
+          내가 키운 AI(🟠)가 다른 AI(🔵)와 3바퀴 승부를 겨룹니다.
+          친구의 모델 파일을 불러오면 <b style="color:var(--gold)">교실 AI 리그</b>도 가능!
+        </div>
+        <div class="btnrow">
+          <button class="small" id="btnRaceVsChamp">🤖 내장 챔피언과</button>
+          <button class="small" id="btnRaceVsFile">📁 파일의 AI와</button>
+        </div>
+        <input type="file" id="fileRival" accept=".json,application/json" class="hidden">
+        <button class="small" id="btnLeague" style="width:100%;margin-top:6px;border-color:var(--gold);color:var(--gold)">🏆 AI 리그 (라운드 로빈 토너먼트)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ 가운데: 메인 캔버스 ══════════ -->
+  <div class="gCenter canvasWrap">
+    <canvas id="mainCanvas"></canvas>
+    <div class="raceHud" id="raceHud"></div>
+    <div class="countdown" id="countdown"></div>
+    <div class="editHint" id="editHint">✏️ 드래그해서 트랙을 그리세요 — 시작점 근처에서 놓으면 완성!</div>
+    <div class="touchBtns" id="touchBtns">
+      <button id="tLeft">◀</button>
+      <button id="tRight">▶</button>
+    </div>
+  </div>
+
+  <!-- ══════════ 오른쪽: 시각화 ══════════ -->
+  <div class="gRight">
+    <div class="card">
+      <h2>🧠 신경망 내부 (실시간)</h2>
+      <canvas id="netCanvas" class="viz" style="height:236px"></canvas>
+      <div class="muted" style="margin-top:6px">입력: 센서 7개 + 속도 → 은닉 16×2 → 출력: 조향 Q값 5개. 밝을수록 활성화, <span style="color:var(--blue)">파랑</span>=양의 가중치, <span style="color:var(--red)">빨강</span>=음.</div>
+    </div>
+    <div class="card">
+      <h2>📈 학습 곡선 (에피소드당 주행 바퀴 수)</h2>
+      <canvas id="chartCanvas" class="viz" style="height:128px"></canvas>
+    </div>
+    <div class="card">
+      <h2>📓 학습 일지</h2>
+      <div class="notes" id="notes"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- 개념 도감 -->
+<div class="overlay hidden" id="glossaryOverlay">
+  <div class="modal">
+    <h2>📖 강화학습 개념 도감</h2>
+    <p class="muted">이 게임의 모든 요소는 실제 강화학습 알고리즘 그대로 구현되어 있습니다.</p>
+    <table>
+      <tr><th>개념</th><th>설명</th><th>게임에서 보기</th></tr>
+      <tr><td>상태 (State)</td><td>에이전트가 관찰하는 환경 정보</td><td>차에서 뻗는 7개 레이더 센서 + 현재 속도 = 8차원 벡터</td></tr>
+      <tr><td>행동 (Action)</td><td>에이전트의 선택지</td><td>조향 5단계 (급좌회전 ~ 급우회전)</td></tr>
+      <tr><td>보상 (Reward)</td><td>행동의 좋고 나쁨 신호</td><td>전진 +, 충돌 −. 왼쪽 슬라이더로 직접 설계</td></tr>
+      <tr><td>DQN</td><td>Q함수를 신경망으로 근사하는 심층 강화학습</td><td>8→16→16→5 신경망, 외부 라이브러리 없이 순수 JS 구현</td></tr>
+      <tr><td>ε-greedy 탐험</td><td>확률 ε로 무작위 행동 → 새로운 전략 발견</td><td>상단 ε 게이지. 초반엔 마구 돌다가 점점 배운 대로 주행</td></tr>
+      <tr><td>경험 재현<br>(Replay Buffer)</td><td>과거 경험을 저장했다가 무작위로 꺼내 학습 → 상관관계 제거</td><td>상단 "경험 버퍼" 카운터 (5만 개 저장)</td></tr>
+      <tr><td>타깃 네트워크</td><td>학습 목표를 천천히 갱신해 발산 방지</td><td>1,500스텝마다 동기화 (학습 일지에 기록)</td></tr>
+      <tr><td>Double DQN</td><td>행동 선택과 평가를 분리해 Q값 과대평가 방지</td><td>학습 업데이트에 적용됨 (van Hasselt, 2015)</td></tr>
+      <tr><td>Huber 손실</td><td>큰 오차의 그래디언트를 제한해 안정화</td><td>TD 오차 클리핑으로 구현</td></tr>
+      <tr><td>할인율 γ</td><td>미래 보상의 현재 가치</td><td>슬라이더로 조절 — 낮추면 근시안적 주행</td></tr>
+      <tr><td>보상 해킹</td><td>잘못 설계된 보상의 허점을 파고드는 현상</td><td>전진 보상 0 + 속도 보너스만 주면? 직접 실험!</td></tr>
+      <tr><td>일반화</td><td>학습한 정책이 새로운 환경에서도 통하는가</td><td>트랙 편집 후 "모델 유지" — 처음 보는 트랙 주행</td></tr>
+      <tr><td>커리큘럼 러닝</td><td>쉬운 과제부터 차례로 학습</td><td>오벌 → 클래식 → 서펜트 순서로 훈련해 보세요</td></tr>
+      <tr><td>절단 vs 종료</td><td>시간 초과(truncation)는 실패(termination)와 다름</td><td>시간 초과 시 done=0으로 저장해 부트스트랩 유지</td></tr>
+      <tr><td>PER</td><td>TD 오차가 큰 "중요한 실수"를 더 자주 복습 (Schaul, 2016). sum-tree로 O(log n) 샘플링</td><td>하이퍼파라미터의 PER 토글 + ⚗️ 벤치마크</td></tr>
+      <tr><td>n-step 리턴</td><td>여러 스텝의 보상을 묶어 학습 신호 전파를 가속</td><td>1/3/5-step 선택</td></tr>
+      <tr><td>희소 보상</td><td>보상이 드물면 탐험이 극도로 어려워짐 — 현실 RL의 최대 난제 중 하나</td><td>보상 설계의 🌵 모드</td></tr>
+    </table>
+    <button class="primary" id="btnCloseGlossary" style="margin-top:16px">닫기</button>
+  </div>
+</div>
+
+<!-- 알고리즘 벤치마크 -->
+<div class="overlay hidden" id="benchOverlay">
+  <div class="modal">
+    <h2>⚗️ 알고리즘 벤치마크</h2>
+    <p class="muted">같은 초기 가중치·같은 트랙·같은 예산으로 <b>DQN의 4가지 변형</b>을 차례로 학습시켜
+    학습 곡선을 비교합니다. 내 모델과 경험 버퍼는 건드리지 않습니다 (완전 분리 실행).
+    현재 트랙: <b id="benchTrack" style="color:var(--gold)"></b></p>
+    <div class="btnrow" style="margin:10px 0">
+      <select id="selBenchBudget" style="flex:2">
+        <option value="8000">빠름 — 설정당 8,000스텝</option>
+        <option value="20000" selected>표준 — 설정당 20,000스텝</option>
+        <option value="40000">정밀 — 설정당 40,000스텝</option>
+      </select>
+      <button class="small" id="btnBenchRun" style="flex:1;border-color:var(--gold);color:var(--gold)">▶ 시작</button>
+    </div>
+    <canvas id="benchCanvas" width="560" height="280" style="width:100%;background:var(--panel2);border-radius:10px"></canvas>
+    <div class="muted" id="benchStatus" style="margin-top:8px">4개 알고리즘이 순서대로 경쟁합니다 — 곡선이 실시간으로 그려집니다.</div>
+    <div id="benchConcl" style="display:none;background:var(--panel2);border-left:4px solid var(--purple);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:8px;font-size:13px;line-height:1.7"></div>
+    <button class="primary" id="btnCloseBench" style="margin-top:14px">닫기</button>
+  </div>
+</div>
+
+<!-- AI 리그 -->
+<div class="overlay hidden" id="leagueOverlay">
+  <div class="modal">
+    <h2>🏆 AI 리그 — 라운드 로빈 토너먼트</h2>
+    <p class="muted">참가한 모든 AI가 서로 3바퀴씩 대전합니다 (승 3점 · 무 1점).
+    친구들의 모델 파일(⬇ 내보내기로 생성)을 모아 <b style="color:var(--gold)">교실 AI 리그</b>를 열어 보세요.
+    대전은 현재 선택된 트랙에서 열립니다.</p>
+    <div id="leagueList" style="margin:10px 0;line-height:2.4"></div>
+    <div class="btnrow">
+      <button class="small" id="btnLeagueAdd">📁 참가자 추가 (모델 파일, 다중 선택)</button>
+      <button class="small" id="btnLeagueRun" style="border-color:var(--gold);color:var(--gold)">🏁 리그 시작</button>
+    </div>
+    <input type="file" id="fileLeague" accept=".json,application/json" multiple class="hidden">
+    <div class="muted" id="leagueStatus" style="margin-top:10px"></div>
+    <div id="leagueResult" style="margin-top:8px"></div>
+    <button class="primary" id="btnCloseLeague" style="margin-top:14px">닫기</button>
+  </div>
+</div>
+
+<!-- 온보딩 투어 -->
+<div class="tourSpot hidden" id="tourSpot"></div>
+<div class="tourCard hidden" id="tourCard">
+  <h3 id="tourTitle"></h3>
+  <div id="tourDesc" class="muted"></div>
+  <div class="btnrow" style="margin-top:10px">
+    <button class="small" id="tourSkip">건너뛰기</button>
+    <button class="small" id="tourNext" style="border-color:var(--gold);color:var(--gold)">다음</button>
+  </div>
+</div>
+
+<!-- 실험실 -->
+<div class="overlay hidden" id="labsOverlay">
+  <div class="modal">
+    <h2>🔬 강화학습 실험실</h2>
+    <p class="muted" style="margin-bottom:12px">
+      각 실험은 <b style="color:var(--purple)">현실의 AI 문제</b>를 이 게임 안에서 재현합니다.
+      가설을 세우고 → 직접 실험하고 → 게임이 결과를 측정해 결론을 내립니다.
+      완료한 실험은 📄 리포트에 담을 수 있습니다.
+    </p>
+    <div id="labList"></div>
+    <div class="btnrow" style="margin-top:14px">
+      <button class="small" id="btnReport">📄 실험 리포트 내보내기</button>
+      <button class="small" id="btnCloseLabs">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 실험 완료 -->
+<div class="overlay hidden" id="labDoneOverlay">
+  <div class="modal">
+    <h2 id="labDoneTitle">🔬 실험 완료</h2>
+    <div id="labDoneBody"></div>
+    <button class="primary" id="btnLabDoneClose" style="margin-top:14px">확인</button>
+  </div>
+</div>
+
+<!-- 도전과제 -->
+<div class="overlay hidden" id="missionsOverlay">
+  <div class="modal">
+    <h2>🎯 도전과제</h2>
+    <div id="missionList"></div>
+    <button class="primary" id="btnCloseMissions" style="margin-top:14px">닫기</button>
+  </div>
+</div>
+
+<!-- 설정 -->
+<div class="overlay hidden" id="settingsOverlay">
+  <div class="modal">
+    <h2>⚙️ 설정</h2>
+    <div class="setrow">
+      <div>효과음<small>엔진음, 충돌음, 알림음 (Web Audio 합성)</small></div>
+      <label class="switch"><input type="checkbox" id="swSound"><i></i></label>
+    </div>
+    <div class="setrow">
+      <div>백그라운드 학습<small>다른 탭을 보는 동안에도 학습을 계속합니다</small></div>
+      <label class="switch"><input type="checkbox" id="swBg"><i></i></label>
+    </div>
+    <div class="setrow">
+      <div>실험 리포트<small>학습 데이터·실험 결과를 제출용 문서로 내보냅니다</small></div>
+      <button class="small" id="btnReport2">📄 생성</button>
+    </div>
+    <div class="setrow">
+      <div>모든 데이터 초기화<small>모델·기록·도전과제·실험을 모두 삭제합니다</small></div>
+      <button class="small" id="btnWipe" style="border-color:var(--red);color:var(--red)">전체 삭제</button>
+    </div>
+    <div class="setrow">
+      <div>배경 음악<small>Web Audio로 실시간 합성되는 칩튠 루프 (에셋 0)</small></div>
+      <label class="switch"><input type="checkbox" id="swMusic"><i></i></label>
+    </div>
+    <div class="setrow">
+      <div>온보딩 투어<small>처음 사용자를 위한 안내를 다시 봅니다</small></div>
+      <button class="small" id="btnTourAgain">다시 보기</button>
+    </div>
+    <hr class="divider">
+    <p class="muted">
+      <b>NEURO DRIVE v4.0</b> — Deep Q-Network를 외부 라이브러리 없이 순수 JavaScript로 구현한
+      AI 리터러시 실험실입니다. Double DQN · PER(우선순위 경험 재현) · n-step 리턴 · Experience Replay · Target Network · Adam · Huber 손실 포함.
+      모든 데이터는 이 기기에만 저장됩니다 (서버 전송 없음).<br>
+      단축키: <span class="kbd">Space</span> 학습 시작/정지 · <span class="kbd">D</span> 시범 주행 · <span class="kbd">H</span> 가치 지도 ·
+      주소창 <span class="kbd">?selftest</span> 자가 진단
+    </p>
+    <button class="primary" id="btnCloseSettings" style="margin-top:14px">닫기</button>
+  </div>
+</div>
+
+<!-- 인트로 -->
+<div class="overlay" id="introOverlay">
+  <div class="modal">
+    <div class="logo">🏎️ NEURO DRIVE</div>
+    <div class="logoSub">보고 · 실험하고 · 대결하는 AI 리터러시 실험실 — <b style="color:var(--gold)">지금 뒤에서 달리는 차가 학습된 AI입니다</b></div>
+    <p><b>모두가 AI를 쓰는 시대. 그런데 AI가 "어떻게 배우는지" 본 적 있나요?</b></p>
+    <p style="margin-top:8px">
+      교과서의 강화학습은 수식뿐이고, 진짜 AI는 서버 안에 숨어 있습니다.
+      NEURO DRIVE는 그 학습 과정을 <b style="color:var(--orange)">눈으로 보고, 손으로 실험하게</b> 만든 도구입니다 —
+      조작법을 전혀 모르는 차가 <b style="color:var(--orange)">센서 7개와 보상 신호</b>만으로
+      수만 번의 충돌 끝에 주행을 터득합니다. 외부 라이브러리 없이 순수 JavaScript로 구현된 진짜 Deep Q-Network입니다.
+    </p>
+    <h3>이렇게 배우세요</h3>
+    <p>
+      1️⃣ <b>훈련</b> — ▶ MAX 속도로 학습 관찰 (1~2분이면 완주) + 🗺 가치 지도로 AI의 머릿속 보기<br>
+      2️⃣ <b>🔬 실험실</b> — 유튜브 추천의 딜레마, SNS의 <b style="color:var(--purple)">보상 해킹</b>, 자율주행의 일반화를 직접 재현<br>
+      3️⃣ <b>대결</b> — 내가 키운 AI와 레이스, 친구의 AI와 ⚔️ 관전 대결<br>
+      4️⃣ <b>📄 리포트</b> — 실험 결과를 제출용 문서로 내보내기
+    </p>
+    <button class="primary" id="btnStart" style="margin-top:14px">시작하기</button>
+    <button class="hidden" id="btnStartPretrained" style="width:100%;margin-top:8px;border-color:var(--gold);color:var(--gold)">🎓 사전 학습된 AI 바로 보기</button>
+  </div>
+</div>
+
+<!-- 레이스 결과 -->
+<div class="overlay hidden" id="raceOverlay">
+  <div class="modal" style="text-align:center">
+    <h2 id="raceTitle">🏁 레이스 종료</h2>
+    <div id="raceResult" style="line-height:2"></div>
+    <button class="primary" id="btnRaceClose" style="margin-top:14px">확인</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ═══════════════════════ 유틸 ═══════════════════════ */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+let _g2 = null;
+function gauss() { // Box-Muller
+  if (_g2 !== null) { const v = _g2; _g2 = null; return v; }
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  v = Math.random();
+  const r = Math.sqrt(-2 * Math.log(u));
+  _g2 = r * Math.sin(2 * Math.PI * v);
+  return r * Math.cos(2 * Math.PI * v);
+}
+const fmt = n => n.toLocaleString('ko-KR');
+const $ = id => document.getElementById(id);
+
+/* 안전한 localStorage */
+function store(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+}
+function load(key, fallback) {
+  try {
+    const s = localStorage.getItem(key);
+    return s ? JSON.parse(s) : fallback;
+  } catch (e) { return fallback; }
+}
+
+/* ═══════════════════════ 사운드 (Web Audio 합성, 에셋 0) ═══════════════════════ */
+const audio = {
+  ctx: null, master: null, engineOsc: null, engineGain: null, engineFilter: null,
+  lastCrash: 0,
+  init() {
+    if (this.ctx) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.5;
+      this.master.connect(this.ctx.destination);
+      // 엔진음: 톱니파 → 로우패스 → 게인
+      this.engineOsc = this.ctx.createOscillator();
+      this.engineOsc.type = 'sawtooth';
+      this.engineOsc.frequency.value = 55;
+      this.engineFilter = this.ctx.createBiquadFilter();
+      this.engineFilter.type = 'lowpass';
+      this.engineFilter.frequency.value = 320;
+      this.engineGain = this.ctx.createGain();
+      this.engineGain.gain.value = 0;
+      this.engineOsc.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
+      this.engineOsc.start();
+      music.start(); // 첫 제스처 이후 BGM 시퀀서 가동
+    } catch (e) { this.ctx = null; }
+  },
+  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+  engine(speedNorm, active) {
+    if (!this.ctx) return;
+    const g = active && settings.sound ? 0.035 + 0.05 * speedNorm : 0;
+    this.engineGain.gain.setTargetAtTime(g, this.ctx.currentTime, 0.08);
+    this.engineOsc.frequency.setTargetAtTime(55 + 150 * speedNorm, this.ctx.currentTime, 0.05);
+  },
+  blip(freq, dur = 0.09, type = 'square', vol = 0.14) {
+    if (!this.ctx || !settings.sound) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + dur + 0.02);
+  },
+  crash() {
+    if (!this.ctx || !settings.sound) return;
+    const now = performance.now();
+    if (now - this.lastCrash < 220) return; // 고속 학습 시 스팸 방지
+    this.lastCrash = now;
+    const t = this.ctx.currentTime;
+    const len = 0.12, buf = this.ctx.createBuffer(1, this.ctx.sampleRate * len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = this.ctx.createBufferSource(); src.buffer = buf;
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 240;
+    const g = this.ctx.createGain(); g.gain.value = 0.35;
+    src.connect(f).connect(g).connect(this.master);
+    src.start(t);
+  },
+  lap() { this.blip(660, 0.1); setTimeout(() => this.blip(880, 0.14), 110); },
+  unlock() { this.blip(523, 0.09); setTimeout(() => this.blip(659, 0.09), 90); setTimeout(() => this.blip(784, 0.16), 180); },
+  count(go) { this.blip(go ? 880 : 440, go ? 0.25 : 0.12, 'sine', 0.2); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.blip(f, 0.18, 'triangle', 0.18), i * 130)); },
+};
+
+/* ═══════════════════════ 신경망 (MLP + Adam) ═══════════════════════ */
+class MLP {
+  constructor(sizes) {
+    this.sizes = sizes; this.L = sizes.length - 1; this.t = 0;
+    this.W = []; this.b = []; this.mW = []; this.vW = []; this.mB = []; this.vB = [];
+    this.gW = []; this.gB = [];
+    for (let l = 0; l < this.L; l++) {
+      const nin = sizes[l], nout = sizes[l + 1];
+      const w = new Float32Array(nin * nout);
+      const s = Math.sqrt(2 / nin); // He 초기화
+      for (let i = 0; i < w.length; i++) w[i] = gauss() * s;
+      this.W.push(w); this.b.push(new Float32Array(nout));
+      this.mW.push(new Float32Array(nin * nout)); this.vW.push(new Float32Array(nin * nout));
+      this.mB.push(new Float32Array(nout)); this.vB.push(new Float32Array(nout));
+      this.gW.push(new Float32Array(nin * nout)); this.gB.push(new Float32Array(nout));
+    }
+    this.acts = sizes.map(n => new Float32Array(n));
+    this.deltas = sizes.map(n => new Float32Array(n));
+  }
+  forward(x, actsOut) {
+    const acts = actsOut || this.acts;
+    acts[0].set(x);
+    for (let l = 0; l < this.L; l++) {
+      const nin = this.sizes[l], nout = this.sizes[l + 1];
+      const W = this.W[l], b = this.b[l], a = acts[l], out = acts[l + 1];
+      const last = l === this.L - 1;
+      for (let j = 0; j < nout; j++) {
+        let s = b[j]; const off = j * nin;
+        for (let i = 0; i < nin; i++) s += W[off + i] * a[i];
+        out[j] = (!last && s < 0) ? 0 : s; // 은닉층 ReLU, 출력층 선형
+      }
+    }
+    return acts[this.L];
+  }
+  // Huber 손실(δ=1) 기반 배치 학습: 선택된 행동의 Q값만 target으로 회귀
+  // weights: PER 중요도 샘플링 보정 (선택), errOut: 샘플별 |TD 오차| 반환 (선택)
+  trainBatch(states, dim, actions, targets, n, lr, weights, errOut) {
+    for (let l = 0; l < this.L; l++) { this.gW[l].fill(0); this.gB[l].fill(0); }
+    let tdSum = 0;
+    for (let k = 0; k < n; k++) {
+      const q = this.forward(states.subarray(k * dim, k * dim + dim));
+      const err = q[actions[k]] - targets[k];
+      tdSum += Math.abs(err);
+      if (errOut) errOut[k] = Math.abs(err);
+      const d = clamp(err, -1, 1) * (weights ? weights[k] : 1) / n; // Huber gradient
+      const dOut = this.deltas[this.L];
+      dOut.fill(0); dOut[actions[k]] = d;
+      for (let l = this.L - 1; l >= 0; l--) {
+        const nin = this.sizes[l], nout = this.sizes[l + 1];
+        const W = this.W[l], gW = this.gW[l], gB = this.gB[l];
+        const aIn = this.acts[l], del = this.deltas[l + 1], dPrev = this.deltas[l];
+        for (let j = 0; j < nout; j++) {
+          const dj = del[j]; if (dj === 0) continue;
+          const off = j * nin;
+          gB[j] += dj;
+          for (let i = 0; i < nin; i++) gW[off + i] += dj * aIn[i];
+        }
+        if (l > 0) {
+          for (let i = 0; i < nin; i++) {
+            if (aIn[i] <= 0) { dPrev[i] = 0; continue; }
+            let s = 0;
+            for (let j = 0; j < nout; j++) s += W[j * nin + i] * del[j];
+            dPrev[i] = s;
+          }
+        }
+      }
+    }
+    this.t++;
+    const b1 = 0.9, b2 = 0.999, e = 1e-8;
+    const c1 = 1 - Math.pow(b1, this.t), c2 = 1 - Math.pow(b2, this.t);
+    for (let l = 0; l < this.L; l++) {
+      const W = this.W[l], g = this.gW[l], m = this.mW[l], v = this.vW[l];
+      for (let i = 0; i < W.length; i++) {
+        m[i] = b1 * m[i] + (1 - b1) * g[i];
+        v[i] = b2 * v[i] + (1 - b2) * g[i] * g[i];
+        W[i] -= lr * (m[i] / c1) / (Math.sqrt(v[i] / c2) + e);
+      }
+      const B = this.b[l], gb = this.gB[l], mb = this.mB[l], vb = this.vB[l];
+      for (let i = 0; i < B.length; i++) {
+        mb[i] = b1 * mb[i] + (1 - b1) * gb[i];
+        vb[i] = b2 * vb[i] + (1 - b2) * gb[i] * gb[i];
+        B[i] -= lr * (mb[i] / c1) / (Math.sqrt(vb[i] / c2) + e);
+      }
+    }
+    return tdSum / n;
+  }
+  copyFrom(o) {
+    for (let l = 0; l < this.L; l++) { this.W[l].set(o.W[l]); this.b[l].set(o.b[l]); }
+  }
+  resetOptim() { // 다른 가중치를 불러올 때 이전 학습의 모멘텀 잔재 제거
+    this.t = 0;
+    for (let l = 0; l < this.L; l++) {
+      this.mW[l].fill(0); this.vW[l].fill(0);
+      this.mB[l].fill(0); this.vB[l].fill(0);
+    }
+  }
+  toJSON() {
+    const r = (a) => Array.from(a, x => Math.round(x * 1e5) / 1e5);
+    return { sizes: this.sizes, W: this.W.map(r), b: this.b.map(r) };
+  }
+  loadJSON(j) {
+    if (!j || !Array.isArray(j.W) || j.W.length !== this.L) throw new Error('모델 형식이 다릅니다');
+    for (let l = 0; l < this.L; l++) {
+      if (j.W[l].length !== this.W[l].length) throw new Error('모델 크기가 다릅니다');
+      this.W[l].set(j.W[l]); this.b[l].set(j.b[l]);
+    }
+  }
+}
+
+/* ═══════════════════════ 경험 재현 버퍼 ═══════════════════════ */
+class Replay {
+  constructor(cap, dim) {
+    this.cap = cap; this.dim = dim; this.n = 0; this.i = 0;
+    this.s = new Float32Array(cap * dim); this.s2 = new Float32Array(cap * dim);
+    this.a = new Uint8Array(cap); this.r = new Float32Array(cap); this.d = new Uint8Array(cap);
+    this.g = new Float32Array(cap); // 부트스트랩 할인 계수 (n-step이면 γ^n)
+    this.tree = null; this.tsize = 0; this.maxP = 1; // PER sum-tree
+  }
+  enablePER() {
+    if (this.tree) return;
+    let size = 1;
+    while (size < this.cap) size *= 2;
+    this.tsize = size;
+    this.tree = new Float32Array(2 * size);
+    for (let i = 0; i < this.n; i++) this.setPrio(i, this.maxP); // 기존 경험 우선순위 부여
+  }
+  setPrio(i, p) { // p = 원시 |TD 오차|, 저장 시 α=0.6 지수 적용 (Schaul, 2016)
+    if (!this.tree) return;
+    if (p > this.maxP) this.maxP = p;
+    let j = i + this.tsize;
+    this.tree[j] = Math.pow(p + 1e-3, 0.6);
+    for (j >>= 1; j >= 1; j >>= 1) this.tree[j] = this.tree[2 * j] + this.tree[2 * j + 1];
+  }
+  prioOf(i) { return this.tree[i + this.tsize]; }
+  samplePER() { // 우선순위 비례 샘플링
+    let v = Math.random() * this.tree[1], j = 1;
+    while (j < this.tsize) {
+      j *= 2;
+      if (v > this.tree[j]) { v -= this.tree[j]; j++; }
+    }
+    return Math.min(j - this.tsize, this.n - 1);
+  }
+  push(s, a, r, s2, done, g) {
+    const i = this.i, dim = this.dim;
+    this.s.set(s, i * dim); this.s2.set(s2, i * dim);
+    this.a[i] = a; this.r[i] = r; this.d[i] = done ? 1 : 0;
+    this.g[i] = g === undefined ? 0.98 : g;
+    if (this.tree) this.setPrio(i, this.maxP); // 새 경험은 최대 우선순위로
+    this.i = (i + 1) % this.cap;
+    if (this.n < this.cap) this.n++;
+  }
+  clear() {
+    this.n = 0; this.i = 0; this.maxP = 1;
+    if (this.tree) this.tree.fill(0);
+  }
+}
+
+/* ═══════════════════════ 트랙 ═══════════════════════ */
+const CW = 840, CH = 560;
+const GRID_CELL = 96;
+
+function chaikin(pts) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    out.push([0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1]]);
+    out.push([0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1]]);
+  }
+  return out;
+}
+function resample(pts, spacing) {
+  const out = [];
+  let total = 0;
+  const lens = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    lens.push(l); total += l;
+  }
+  const n = Math.max(24, Math.round(total / spacing));
+  const step = total / n;
+  let target = 0, acc = 0, i = 0;
+  for (let k = 0; k < n; k++) {
+    while (acc + lens[i] < target) { acc += lens[i]; i = (i + 1) % pts.length; }
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    const t = lens[i] > 0 ? (target - acc) / lens[i] : 0;
+    out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+    target += step;
+  }
+  return out;
+}
+
+function buildTrack(rawPts, width) {
+  let pts = rawPts;
+  for (let k = 0; k < 3; k++) pts = chaikin(pts);
+  pts = resample(pts, 10);
+  const n = pts.length, hw = width / 2;
+  let area = 0;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    area += p[0] * q[1] - q[0] * p[1];
+  }
+  if (area < 0) pts.reverse();
+  const wallsL = [], wallsR = [], cum = [0];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n], next = pts[(i + 1) % n];
+    let tx = next[0] - prev[0], ty = next[1] - prev[1];
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    wallsL.push([pts[i][0] - ty * hw, pts[i][1] + tx * hw]);
+    wallsR.push([pts[i][0] + ty * hw, pts[i][1] - tx * hw]);
+  }
+  for (let i = 1; i <= n; i++) {
+    const p = pts[i - 1], q = pts[i % n];
+    cum.push(cum[i - 1] + Math.hypot(q[0] - p[0], q[1] - p[1]));
+  }
+  const len = cum[n];
+  const segs = [];
+  for (const walls of [wallsL, wallsR]) {
+    for (let i = 0; i < n; i++) {
+      const a = walls[i], b = walls[(i + 1) % n];
+      segs.push([a[0], a[1], b[0], b[1]]);
+    }
+  }
+  const grid = new Map();
+  segs.forEach((s, idx) => {
+    const x0 = Math.floor(Math.min(s[0], s[2]) / GRID_CELL), x1 = Math.floor(Math.max(s[0], s[2]) / GRID_CELL);
+    const y0 = Math.floor(Math.min(s[1], s[3]) / GRID_CELL), y1 = Math.floor(Math.max(s[1], s[3]) / GRID_CELL);
+    for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) {
+      const k = gx + ',' + gy;
+      if (!grid.has(k)) grid.set(k, []);
+      grid.get(k).push(idx);
+    }
+  });
+  return { pts, n, hw, wallsL, wallsR, cum, len, segs, grid };
+}
+
+function candidates(track, x, y, r) {
+  const out = [];
+  const x0 = Math.floor((x - r) / GRID_CELL), x1 = Math.floor((x + r) / GRID_CELL);
+  const y0 = Math.floor((y - r) / GRID_CELL), y1 = Math.floor((y + r) / GRID_CELL);
+  for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) {
+    const c = track.grid.get(gx + ',' + gy);
+    if (c) for (let i = 0; i < c.length; i++) out.push(c[i]);
+  }
+  return out;
+}
+
+function castRay(track, x, y, ang, maxD, cand) {
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  let best = maxD;
+  const segs = track.segs;
+  for (let k = 0; k < cand.length; k++) {
+    const s = segs[cand[k]];
+    const sx = s[2] - s[0], sy = s[3] - s[1];
+    const denom = dx * sy - dy * sx;
+    if (denom > -1e-9 && denom < 1e-9) continue;
+    const qx = s[0] - x, qy = s[1] - y;
+    const t = (qx * sy - qy * sx) / denom;
+    const u = (qx * dy - qy * dx) / denom;
+    if (t >= 0 && t < best && u >= 0 && u <= 1) best = t;
+  }
+  return best;
+}
+
+function segIntersect(ax, ay, bx, by, cx, cy, dx2, dy2) {
+  const r1x = bx - ax, r1y = by - ay, r2x = dx2 - cx, r2y = dy2 - cy;
+  const denom = r1x * r2y - r1y * r2x;
+  if (denom > -1e-9 && denom < 1e-9) return false;
+  const qx = cx - ax, qy = cy - ay;
+  const t = (qx * r2y - qy * r2x) / denom;
+  const u = (qx * r1y - qy * r1x) / denom;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+function distPointSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0;
+  t = clamp(t, 0, 1);
+  const x = ax + dx * t, y = ay + dy * t;
+  return Math.hypot(px - x, py - y);
+}
+function carCollides(track, ox, oy, nx, ny, r, cand) {
+  const segs = track.segs;
+  for (let k = 0; k < cand.length; k++) {
+    const s = segs[cand[k]];
+    if (segIntersect(ox, oy, nx, ny, s[0], s[1], s[2], s[3])) return true;
+    if (distPointSeg(nx, ny, s[0], s[1], s[2], s[3]) < r) return true;
+  }
+  return false;
+}
+function projectProgress(track, x, y, hint) {
+  const { pts, n, cum } = track;
+  let bi = hint, bd = Infinity;
+  for (let o = -8; o <= 8; o++) {
+    const i = ((hint + o) % n + n) % n;
+    const d = (pts[i][0] - x) ** 2 + (pts[i][1] - y) ** 2;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  let bestS = cum[bi], bestD = Infinity;
+  for (const i0 of [(bi - 1 + n) % n, bi]) {
+    const p = pts[i0], q = pts[(i0 + 1) % n];
+    const dx = q[0] - p[0], dy = q[1] - p[1];
+    const l2 = dx * dx + dy * dy;
+    let t = l2 > 0 ? ((x - p[0]) * dx + (y - p[1]) * dy) / l2 : 0;
+    t = clamp(t, 0, 1);
+    const d = (p[0] + dx * t - x) ** 2 + (p[1] + dy * t - y) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      bestS = cum[i0] + Math.sqrt(l2) * t;
+    }
+  }
+  return { s: bestS % track.len, idx: bi };
+}
+function globalNearest(track, x, y) {
+  let bi = 0, bd = Infinity;
+  for (let i = 0; i < track.n; i++) {
+    const d = (track.pts[i][0] - x) ** 2 + (track.pts[i][1] - y) ** 2;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return bi;
+}
+
+/* 프리셋 트랙 */
+const TRACKS = {
+  oval: {
+    name: '오벌', badge: '🟢', width: 66,
+    pts: (() => {
+      const p = [];
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        p.push([420 + Math.cos(a) * 300, 280 + Math.sin(a) * 175]);
+      }
+      return p;
+    })(),
+  },
+  classic: {
+    name: '클래식', badge: '🟡', width: 56,
+    pts: [[140, 140], [360, 90], [560, 120], [720, 200], [730, 330],
+          [600, 430], [430, 380], [300, 460], [150, 430], [90, 220]],
+  },
+  serpent: {
+    name: '서펜트', badge: '🔴', width: 48,
+    pts: [[110, 120], [300, 80], [520, 140], [700, 90], [750, 240], [620, 320],
+          [730, 420], [520, 510], [330, 420], [190, 500], [90, 360], [160, 240]],
+  },
+};
+let currentTrackId = 'classic';
+let lastCustomRaw = null; // 커스텀 트랙 공유용 원본 점
+function trackDisplayName(id) {
+  if (TRACKS[id]) return TRACKS[id].name;
+  if (id === 'custom') return '커스텀';
+  if (id.startsWith('daily-')) return '오늘의 트랙';
+  return id;
+}
+/* 오늘의 트랙 — 날짜 시드로 매일 새 서킷 생성 (반지름 함수 방식 → 자기교차 없음) */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s) {
+  let h = 2166136261;
+  for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// 휴리스틱 봇(에이전트와 동일한 5단계 조향)으로 트랙 완주 가능성을 검증
+function botDrivable(track, needLaps = 1.2, maxSteps = 2500) {
+  const car = makeCar();
+  let idx = placeCarAt(track, car, 0, 0, 0);
+  let pr = projectProgress(track, car.x, car.y, idx);
+  let s = pr.s, prog = 0;
+  const st = new Float32Array(DIM);
+  for (let i = 0; i < maxSteps; i++) {
+    computeState(track, car, st);
+    const bal = (st[4] + st[5] + st[6]) - (st[0] + st[1] + st[2]);
+    let steer = bal * 1.8;
+    if (st[3] < 0.35) steer += (bal >= 0 ? 1 : -1) * 0.8;
+    let best = 0, bd = 1e9;
+    for (let a = 0; a < NA; a++) { const d = Math.abs(STEERS[a] - steer); if (d < bd) { bd = d; best = a; } }
+    stepCarPhysics(car, STEERS[best]);
+    const cand = candidates(track, car.x, car.y, RAY_MAX + 10);
+    if (carCollides(track, car.px, car.py, car.x, car.y, CAR_R, cand)) return false;
+    pr = projectProgress(track, car.x, car.y, idx);
+    idx = pr.idx;
+    let d = pr.s - s;
+    if (d > track.len / 2) d -= track.len;
+    if (d < -track.len / 2) d += track.len;
+    s = pr.s; prog += d;
+    if (prog >= track.len * needLaps) return true;
+  }
+  return false;
+}
+function dailyTrack(key) {
+  key = key || new Date().toISOString().slice(0, 10);
+  // 완주 가능한 트랙이 나올 때까지 시드 변형 + 굴곡 완만화 (결정적 — 같은 날 = 같은 트랙)
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const rnd = mulberry32(hashStr(key + '#' + attempt));
+    const soften = 1 - attempt * 0.09;
+    const cx = 420, cy = 285, n = 14;
+    const base = 185 + rnd() * 25;
+    const a1 = (30 + rnd() * 45) * soften, k1 = 2 + Math.floor(rnd() * 2);
+    const a2 = (15 + rnd() * 25) * soften, k2 = 4 + Math.floor(rnd() * 3);
+    const p1 = rnd() * 6.28, p2 = rnd() * 6.28;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const th = (i / n) * Math.PI * 2;
+      let r = base + a1 * Math.sin(k1 * th + p1) + a2 * Math.sin(k2 * th + p2);
+      r = clamp(r, 120, 240);
+      pts.push([cx + Math.cos(th) * r * 1.35, cy + Math.sin(th) * r]);
+    }
+    const width = 50 + Math.floor(rnd() * 3) * 4;
+    if (botDrivable(buildTrack(pts, width))) return { key, pts, width, attempt };
+  }
+  // 이론상 도달 불가한 안전망: 넓은 오벌
+  return { key, pts: TRACKS.oval.pts, width: 66, attempt: -1 };
+}
+
+/* ═══════════════════════ 차량 물리 ═══════════════════════ */
+const DIM = 8, NA = 5;
+const RAYS = [-75, -45, -20, 0, 20, 45, 75].map(d => d * Math.PI / 180);
+const RAY_MAX = 170, CAR_R = 7, MAX_SPD = 3.6;
+const STEERS = [-1, -0.5, 0, 0.5, 1];
+
+function stepCarPhysics(car, steer) {
+  car.lastSteer = steer;
+  const tgt = MAX_SPD * (1 - 0.4 * Math.abs(steer));
+  car.speed += 0.06 * (tgt - car.speed);
+  car.heading += steer * 0.085 * (0.35 + 0.65 * car.speed / MAX_SPD);
+  car.px = car.x; car.py = car.y;
+  car.x += Math.cos(car.heading) * car.speed;
+  car.y += Math.sin(car.heading) * car.speed;
+}
+function computeState(track, car, out) {
+  const cand = candidates(track, car.x, car.y, RAY_MAX + 10);
+  for (let i = 0; i < RAYS.length; i++) {
+    const d = castRay(track, car.x, car.y, car.heading + RAYS[i], RAY_MAX, cand);
+    out[i] = d / RAY_MAX;
+    car.rayD[i] = d;
+  }
+  out[7] = car.speed / MAX_SPD;
+  return cand;
+}
+function makeCar() {
+  return { x: 0, y: 0, px: 0, py: 0, heading: 0, speed: 0, stun: 0, rayD: new Float32Array(RAYS.length), trail: [] };
+}
+function placeCarAt(track, car, s, lateral, headingNoise) {
+  const idx = Math.floor((s / track.len) * track.n) % track.n;
+  const p = track.pts[idx], q = track.pts[(idx + 1) % track.n];
+  let tx = q[0] - p[0], ty = q[1] - p[1];
+  const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+  car.x = p[0] - ty * lateral; car.y = p[1] + tx * lateral;
+  car.px = car.x; car.py = car.y;
+  car.heading = Math.atan2(ty, tx) + headingNoise;
+  car.speed = 1.8;
+  car.trail.length = 0;
+  return idx;
+}
+
+/* ═══════════════════════ 환경 ═══════════════════════ */
+function createEnv(silent) { // silent: 벤치마크 등 화면 밖 인스턴스 (사운드·이펙트 없음)
+  return {
+    silent: !!silent,
+    track: null, car: makeCar(), state: new Float32Array(DIM),
+    ci: 0, s: 0, epProg: 0, epRet: 0, epSteps: 0,
+    stuckTimer: 0, stuckMark: 0, cpMark: 0,
+    crashFx: null,
+    reset(randomStart) {
+      const t = this.track;
+      const s0 = randomStart ? Math.random() * t.len : 0;
+      const lat = randomStart ? (Math.random() - 0.5) * t.hw * 0.7 : 0;
+      const hn = randomStart ? (Math.random() - 0.5) * 0.5 : 0;
+      this.ci = placeCarAt(t, this.car, s0, lat, hn);
+      this.s = projectProgress(t, this.car.x, this.car.y, this.ci).s;
+      this.epProg = 0; this.epRet = 0; this.epSteps = 0;
+      this.stuckTimer = 0; this.stuckMark = 0; this.cpMark = 0;
+      computeState(t, this.car, this.state);
+    },
+    step(a) {
+      const t = this.track, car = this.car;
+      stepCarPhysics(car, STEERS[a]);
+      const cand = candidates(t, car.x, car.y, RAY_MAX + 10);
+      const crashed = carCollides(t, car.px, car.py, car.x, car.y, CAR_R, cand);
+      const pr = projectProgress(t, car.x, car.y, this.ci);
+      this.ci = pr.idx;
+      let d = pr.s - this.s;
+      if (d > t.len / 2) d -= t.len;
+      if (d < -t.len / 2) d += t.len;
+      this.s = pr.s;
+      this.epProg += d;
+      this.epSteps++;
+      let r;
+      if (P.sparse) { // 🌵 희소 보상: 1/5바퀴 체크포인트에서만 +3
+        r = 0;
+        const cp = Math.floor(this.epProg / (t.len / 5));
+        if (cp > this.cpMark) { r += 3 * (cp - this.cpMark); this.cpMark = cp; }
+      } else {
+        r = d * 0.06 * P.rProg + (car.speed / MAX_SPD) * 0.01 * P.rSpd;
+      }
+      let done = false, truncated = false;
+      if (crashed) {
+        r -= P.rCrash; done = true;
+        if (!this.silent) {
+          this.crashFx = { x: car.x, y: car.y, t: 16, parts: makeParts(car.x, car.y) };
+          audio.crash();
+        }
+      } else {
+        if (this.epProg - this.stuckMark > 4) { this.stuckMark = this.epProg; this.stuckTimer = 0; }
+        else if (++this.stuckTimer > 200) { r -= 1; done = true; }
+        if (this.epSteps >= 4000) { truncated = true; } // 절단: done=0으로 저장
+      }
+      this.epRet += r;
+      for (let i = 0; i < RAYS.length; i++) {
+        const rd = castRay(t, car.x, car.y, car.heading + RAYS[i], RAY_MAX, cand);
+        this.state[i] = rd / RAY_MAX; car.rayD[i] = rd;
+      }
+      this.state[7] = car.speed / MAX_SPD;
+      return { r, done, truncated };
+    }
+  };
+}
+const env = createEnv(false);
+function makeParts(x, y) {
+  const p = [];
+  for (let i = 0; i < 7; i++) {
+    const a = Math.random() * Math.PI * 2, v = 1 + Math.random() * 2.2;
+    p.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v });
+  }
+  return p;
+}
+
+/* ═══════════════════════ 에이전트 (DQN) ═══════════════════════ */
+const SIZES = [DIM, 16, 16, NA];
+let net = new MLP(SIZES);
+let target = new MLP(SIZES);
+target.copyFrom(net);
+const replay = new Replay(50000, DIM);
+
+const P = {
+  lr: 0.001, gamma: 0.98, epsDecay: Math.exp(-Math.LN2 / 8000), epsMin: 0.02,
+  rProg: 1, rSpd: 0, rCrash: 3,
+  useDouble: true, usePER: false, nStep: 1, sparse: false,
+};
+const TRAIN_EVERY = 2, BATCH = 64, WARMUP = 1000, TARGET_SYNC = 1500;
+
+let eps = 1.0, stepCount = 0, epCount = 0, lossAvg = 0, syncCount = 0;
+let epHistory = [];
+let bestLaps = 0;
+let hackSteps = 0; // 보상 해킹 실험 추적
+const prevState = new Float32Array(DIM);
+const bS = new Float32Array(BATCH * DIM), bS2 = new Float32Array(BATCH * DIM);
+const bA = new Uint8Array(BATCH), bR = new Float32Array(BATCH), bD = new Uint8Array(BATCH);
+const bY = new Float32Array(BATCH);
+const q2buf = new Float32Array(NA);
+
+function argmax(q) {
+  let b = 0;
+  for (let i = 1; i < q.length; i++) if (q[i] > q[b]) b = i;
+  return b;
+}
+
+// 범용 DQN 배치 학습 — 메인 학습기와 ⚗️ 벤치마크 트레이너가 공유
+const bW = new Float32Array(BATCH), bErr = new Float32Array(BATCH);
+const bIdx = new Int32Array(BATCH), bG = new Float32Array(BATCH);
+function dqnTrainBatch(netX, tgtX, repX, o) { // o: {double, per, lr}
+  const n = repX.n;
+  const usePer = o.per && repX.tree && repX.tree[1] > 0;
+  for (let k = 0; k < BATCH; k++) {
+    const i = usePer ? repX.samplePER() : (Math.random() * n) | 0;
+    bIdx[k] = i;
+    bS.set(repX.s.subarray(i * DIM, i * DIM + DIM), k * DIM);
+    bS2.set(repX.s2.subarray(i * DIM, i * DIM + DIM), k * DIM);
+    bA[k] = repX.a[i]; bR[k] = repX.r[i]; bD[k] = repX.d[i]; bG[k] = repX.g[i];
+  }
+  if (usePer) { // 중요도 샘플링 보정 (β=0.5, 배치 최대값으로 정규화)
+    let wMax = 0;
+    for (let k = 0; k < BATCH; k++) {
+      const p = repX.prioOf(bIdx[k]) / repX.tree[1];
+      bW[k] = Math.pow(n * p + 1e-9, -0.5);
+      if (bW[k] > wMax) wMax = bW[k];
+    }
+    for (let k = 0; k < BATCH; k++) bW[k] /= wMax;
+  } else bW.fill(1);
+  for (let k = 0; k < BATCH; k++) {
+    const s2 = bS2.subarray(k * DIM, k * DIM + DIM);
+    if (o.double) { // Double DQN: 선택은 online, 평가는 target
+      q2buf.set(netX.forward(s2));
+      const aStar = argmax(q2buf);
+      bY[k] = bR[k] + (bD[k] ? 0 : bG[k] * tgtX.forward(s2)[aStar]);
+    } else { // 고전 DQN: target이 선택+평가 모두 (과대평가 발생)
+      const qt = tgtX.forward(s2);
+      bY[k] = bR[k] + (bD[k] ? 0 : bG[k] * qt[argmax(qt)]);
+    }
+  }
+  const loss = netX.trainBatch(bS, DIM, bA, bY, BATCH, o.lr, bW, bErr);
+  if (usePer) for (let k = 0; k < BATCH; k++) repX.setPrio(bIdx[k], bErr[k]);
+  return loss;
+}
+function trainOnBatch() {
+  const loss = dqnTrainBatch(net, target, replay, { double: P.useDouble, per: P.usePER, lr: P.lr });
+  lossAvg = lossAvg === 0 ? loss : lossAvg * 0.98 + loss * 0.02;
+}
+// n-step 리턴: n개 전이의 보상을 γ-할인 합으로 묶어 저장 (n=1이면 기존과 동일)
+function pushNstep(rep, pend, s, a, r, s2, done, truncated, gamma, n) {
+  if (n <= 1) { rep.push(s, a, r, s2, done, gamma); return; }
+  pend.push({ s: new Float32Array(s), a, r });
+  const emit = (count, last, term) => {
+    let R = 0;
+    for (let i = 0; i < count; i++) R += Math.pow(gamma, i) * pend[i].r;
+    rep.push(pend[0].s, pend[0].a, R, last, term ? 1 : 0, Math.pow(gamma, count));
+    pend.shift();
+  };
+  if (done) { while (pend.length) emit(pend.length, s2, true); }        // 종료: 전부 방출
+  else if (truncated) { while (pend.length) emit(pend.length, s2, false); } // 절단: 부트스트랩 유지
+  else if (pend.length >= n) emit(n, s2, false);
+}
+const mainPend = [];
+
+function endEpisode() {
+  const laps = env.epProg / env.track.len;
+  epHistory.push({ laps, ret: env.epRet });
+  if (epHistory.length > 600) epHistory.shift();
+  epCount++;
+  if (laps > bestLaps) {
+    const first = bestLaps < 1 && laps >= 1;
+    bestLaps = laps;
+    if (first) {
+      note('🎉 <b>첫 완주!</b> 에피소드 ' + fmt(epCount) + ' — 신경망이 트랙 한 바퀴를 스스로 돌았습니다.', 'win');
+      unlock('first-lap');
+    } else if (laps >= 1) note('🏆 신기록 ' + laps.toFixed(2) + '바퀴 (EP ' + fmt(epCount) + ')', 'win');
+  }
+  if (epCount % 100 === 0) autoSave();
+  if (epCount >= 500) unlock('marathon');
+  if (!milestones.grad && epHistory.length >= 10) {
+    const last10 = epHistory.slice(-10);
+    if (last10.reduce((a, e) => a + e.laps, 0) / 10 >= 1) {
+      milestones.grad = true;
+      unlock('graduate');
+      note('🎓 <b>합격!</b> 최근 10판 평균 1바퀴 이상 — 안정적인 주행을 학습했습니다. 이제 🏁 AI와 대결해 보세요!', 'win');
+    }
+  }
+  labTick();
+  env.reset(true);
+}
+
+const milestones = { eps5: false, eps2: false, bufFull: false, grad: false, sync1: false };
+
+function agentStep(forceGreedy) {
+  prevState.set(env.state);
+  let a;
+  if (!forceGreedy && Math.random() < eps) a = (Math.random() * NA) | 0;
+  else a = argmax(net.forward(env.state));
+  const { r, done, truncated } = env.step(a);
+  if (!forceGreedy) {
+    pushNstep(replay, mainPend, prevState, a, r, env.state, done, truncated, P.gamma, P.nStep);
+    stepCount++;
+    eps = Math.max(P.epsMin, eps * P.epsDecay);
+    if (stepCount % TRAIN_EVERY === 0 && replay.n >= WARMUP) trainOnBatch();
+    if (stepCount % TARGET_SYNC === 0) {
+      target.copyFrom(net); syncCount++;
+      if (!milestones.sync1) { milestones.sync1 = true; note('🔄 타깃 네트워크 첫 동기화 — 학습 목표가 천천히 따라가며 발산을 막습니다. (이후 1,500스텝마다 반복)', 'sys'); }
+    }
+    if (!milestones.eps5 && eps <= 0.5) { milestones.eps5 = true; note('🧭 ε = 0.50 — 이제 절반은 배운 대로, 절반은 탐험으로 움직입니다.', 'sys'); }
+    if (!milestones.eps2 && eps <= 0.2) { milestones.eps2 = true; note('🎯 ε = 0.20 — 탐험을 줄이고 학습된 정책을 신뢰하기 시작합니다.', 'sys'); }
+    if (!milestones.bufFull && replay.n >= replay.cap) { milestones.bufFull = true; note('📦 경험 버퍼 가득 참(5만 개) — 이제 오래된 기억부터 덮어씁니다.', 'sys'); }
+    // 보상 해킹 실험 감지
+    if (P.rProg === 0 && P.rSpd >= 3) { if (++hackSteps >= 2000) unlock('hacker'); }
+    else hackSteps = 0;
+    // 발산 감지 → 자동 보호
+    if (stepCount % 5000 === 0 && !isFinite(net.W[0][0])) {
+      toggleRun(false);
+      note('⚠️ <b>발산 감지!</b> 학습률이 너무 높았습니다. 학습을 일시정지했어요 — 모델을 초기화하고 학습률을 낮춰 보세요.', 'sys');
+    }
+  } else {
+    // 일반화 도전과제: 커스텀 트랙에서 학습 없이 완주
+    if (currentTrackId === 'custom' && env.epProg >= env.track.len) { unlock('generalist'); labEvent('demo-custom-lap'); }
+  }
+  if (done || truncated) endEpisode();
+}
+
+/* ═══════════════════════ 진행도/설정 저장 ═══════════════════════ */
+const settings = Object.assign({ sound: true, music: true, bg: true }, load('neurodrive.settings.v1', {}));
+const progress = Object.assign({ missions: [], records: {}, labs: {}, ghosts: {} }, load('neurodrive.progress.v1', {}));
+function saveSettings() { store('neurodrive.settings.v1', settings); }
+function saveProgress() { store('neurodrive.progress.v1', progress); }
+
+/* ═══════════════════════ 도전과제 ═══════════════════════ */
+const MISSIONS = [
+  { id: 'first-lap', ic: '🏁', nm: '첫 완주', ds: '훈련에서 AI가 트랙 한 바퀴를 완주' },
+  { id: 'graduate', ic: '🎓', nm: '졸업장', ds: '최근 10판 평균 1바퀴 이상 달성' },
+  { id: 'hacker', ic: '🕳️', nm: '보상 해커', ds: '전진 보상 0 + 속도 보너스 3 이상으로 2,000스텝 학습' },
+  { id: 'designer', ic: '✏️', nm: '트랙 디자이너', ds: '직접 그린 트랙을 적용' },
+  { id: 'generalist', ic: '🌍', nm: '일반화의 달인', ds: '내가 그린 트랙에서 재학습 없이 완주 (시범 주행)' },
+  { id: 'beat-ai', ic: '🏆', nm: 'AI 격파', ds: '레이스에서 AI를 이기기' },
+  { id: 'no-stun', ic: '🛡️', nm: '무결점 드라이버', ds: '레이스를 한 번도 충돌하지 않고 완주' },
+  { id: 'marathon', ic: '💯', nm: '백전노장', ds: '학습 에피소드 500회 달성' },
+  { id: 'scientist', ic: '⚗️', nm: '알고리즘 과학자', ds: '알고리즘 벤치마크를 끝까지 완주' },
+];
+function unlock(id) {
+  if (progress.missions.includes(id)) return;
+  const m = MISSIONS.find(m => m.id === id);
+  if (!m) return;
+  progress.missions.push(id);
+  saveProgress();
+  toast(`${m.ic} 도전과제 달성 — <b>${m.nm}</b>`);
+  audio.unlock();
+}
+function renderMissions() {
+  $('missionList').innerHTML = MISSIONS.map(m => {
+    const done = progress.missions.includes(m.id);
+    return `<div class="mission${done ? ' done' : ''}">
+      <div class="ic">${m.ic}</div>
+      <div><div class="nm">${m.nm}</div><div class="ds">${m.ds}</div></div>
+      <div class="chk">✓</div></div>`;
+  }).join('');
+}
+function toast(html) {
+  const d = document.createElement('div');
+  d.className = 'toast';
+  d.innerHTML = html;
+  $('toasts').appendChild(d);
+  setTimeout(() => d.classList.add('fade'), 3600);
+  setTimeout(() => d.remove(), 4200);
+}
+
+/* ═══════════════════════ 실험실 (Labs) — 현실의 AI 문제를 게임에서 재현 ═══════════════════════ */
+let epsHalfLife = 8000;   // slEps 슬라이더와 동기화
+let trackSwitchEp = 0;    // 트랙 변경 시점의 에피소드 번호
+const LABS = [
+  { id: 'explore', ic: '🧭', title: '탐험 vs 활용', sub: '왜 AI는 모험을 해야 하는가',
+    why: '유튜브 추천이 "보던 것만" 틀어주면 새 취향을 영영 못 찾고, 신약 탐색 AI가 아는 분자만 뒤지면 신약은 없습니다. 지금의 최선(활용)과 새로운 시도(탐험) 사이의 균형은 모든 지능적 의사결정의 근본 문제입니다.',
+    phases: [
+      '① 🗑 모델 초기화 → ε 반감기를 <b>2천 스텝</b>으로 → ▶ 15,000스텝 학습 (성급한 탐험 종료)',
+      '② 다시 🗑 초기화 → 반감기 <b>8천 스텝</b> → ▶ 15,000스텝 학습 (충분한 탐험) — 클래식 트랙 권장',
+    ] },
+  { id: 'hack', ic: '🕳️', title: '보상 해킹', sub: 'AI는 시킨 대로가 아니라 보상받는 대로 배운다',
+    why: 'SNS가 체류 시간만 보상하면 자극적 콘텐츠가 이깁니다. 한 보트 게임 AI는 점수만 보상받자 결승선 대신 아이템만 뱅뱅 돌았습니다(OpenAI CoastRunners, 2016). 목표를 잘못 정의하면 AI는 그 허점을 파고듭니다 — AI 안전(정렬) 연구의 출발점입니다.',
+    phases: [
+      '① 보상 설계에서 <b>전진 보상 0</b>, <b>속도 보너스 3 이상</b>으로 → ▶ 3,000스텝 이상 학습하며 차의 행동 관찰',
+    ] },
+  { id: 'curriculum', ic: '🪜', title: '커리큘럼 러닝', sub: '쉬운 것부터 배우면 어려운 것이 빨라진다',
+    why: '사람이 구구단 → 방정식 → 미적분 순서로 배우듯, AI도 과제의 사다리를 오르면 훨씬 빨리 배웁니다. OpenAI의 로봇 손, 알파스타 모두 커리큘럼으로 훈련됐습니다.',
+    phases: [
+      '① 🟢 오벌 트랙에서 학습해 최근 평균 <b>1바퀴 이상</b> 달성',
+      '② 모델을 유지한 채 🔴 서펜트로 이동, 이어서 학습해 평균 <b>1바퀴</b> 달성',
+    ] },
+  { id: 'general', ic: '🌍', title: '일반화', sub: '암기가 아니라 이해했는가',
+    why: '자율주행차는 세상 모든 도로를 외울 수 없습니다. "이 트랙"이 아니라 "운전 그 자체"를 배워야 처음 보는 길을 달립니다. 훈련 데이터 밖에서도 통하는가 — 기계학습의 최종 시험입니다.',
+    phases: [
+      '① AI를 충분히 훈련 → ✏️ 트랙 탭에서 나만의 트랙 그리기 → <b>시범 주행</b>을 켜고 재학습 없이 완주',
+    ] },
+  { id: 'duel', ic: '⚔️', title: '인간 vs 기계', sub: '기계의 강점, 인간의 강점',
+    why: 'AI는 피로도, 감정, 잡념이 없습니다 — 같은 판단을 1초에 60번씩 영원히 반복합니다. 그렇다면 인간의 강점은 무엇이어야 할까요? 몸으로 확인해 보세요.',
+    phases: [
+      '① 🏁 대결 탭에서 훈련된 AI와 3바퀴 레이스를 끝까지 완료',
+    ] },
+];
+let activeLab = null, labState = null;
+function startLab(id) {
+  activeLab = id;
+  labState = { phase: 0, armed: false, data: {} };
+  updateLabBar();
+  $('labsOverlay').classList.add('hidden');
+  toast('🔬 실험 시작 — 상단 보라색 안내를 따라 진행하세요');
+}
+function stopLab() { activeLab = null; labState = null; updateLabBar(); }
+function updateLabBar() {
+  const bar = $('labBar');
+  if (!activeLab) { bar.style.display = 'none'; return; }
+  const lab = LABS.find(l => l.id === activeLab);
+  bar.style.display = 'flex';
+  $('labBarText').innerHTML = `🔬 <b>${lab.ic} ${lab.title}</b> — ${lab.phases[labState.phase]}`;
+}
+function completeLab(summary) {
+  const lab = LABS.find(l => l.id === activeLab);
+  progress.labs[lab.id] = { done: true, summary: summary.replace(/<[^>]+>/g, '') };
+  saveProgress();
+  audio.unlock();
+  $('labDoneTitle').textContent = lab.ic + ' 실험 완료 — ' + lab.title;
+  $('labDoneBody').innerHTML =
+    `<p>${summary}</p><h3>이 실험이 현실에서 갖는 의미</h3><p class="muted">${lab.why}</p>`;
+  $('labDoneOverlay').classList.remove('hidden');
+  stopLab();
+}
+function avgLast(n) {
+  const s = epHistory.slice(-n);
+  return s.length ? s.reduce((a, e) => a + e.laps, 0) / s.length : 0;
+}
+// 그리디 평가: 탐험을 끄고 정책의 진짜 실력을 측정 (학습 중 평균은 탐험 노이즈가 섞임)
+function greedyLaps(maxSteps) {
+  env.reset(false);
+  let done = false, steps = 0;
+  while (!done && steps < maxSteps) {
+    const q = net.forward(env.state);
+    let b = 0;
+    for (let i = 1; i < NA; i++) if (q[i] > q[b]) b = i;
+    done = env.step(b).done;
+    steps++;
+  }
+  const laps = env.epProg / env.track.len;
+  env.reset(true);
+  return laps;
+}
+function labEvent(ev, info) {
+  if (!activeLab || !labState) return;
+  if (activeLab === 'explore' && ev === 'reset') labState.armed = true;
+  if (activeLab === 'general' && ev === 'demo-custom-lap')
+    completeLab('재학습 없이 처음 보는 트랙을 완주했습니다. AI는 트랙을 암기한 것이 아니라 센서와 조향의 관계, 즉 <b>운전 그 자체</b>를 배웠습니다.');
+  if (activeLab === 'duel' && ev === 'race-end' && info && !info.spectate)
+    completeLab(info.pWin
+      ? '당신이 AI를 이겼습니다! 하지만 훈련을 더 시키면 AI는 랩마다 거의 같은 주행을 무한히 반복합니다 — 일관성은 기계의 영역입니다.'
+      : 'AI가 승리했습니다. AI는 피로도, 긴장도 없이 1초에 60번씩 판단을 반복합니다 — 그 상대를 당신이 직접 만들어냈다는 것이 핵심입니다.');
+}
+function labTick() {
+  if (!activeLab || !labState) return;
+  const L = labState;
+  if (activeLab === 'explore' && L.armed && stepCount >= 15000) {
+    if (L.phase === 0 && epsHalfLife <= 3000) {
+      L.data.a = greedyLaps(3000);
+      L.phase = 1; L.armed = false;
+      updateLabBar();
+      toast('🧭 1단계 실력 측정: ' + L.data.a.toFixed(2) + '바퀴 (그리디 평가) — 이제 2단계!');
+    } else if (L.phase === 1 && epsHalfLife >= 8000) {
+      L.data.b = greedyLaps(3000);
+      completeLab(`탐험을 끄고 3,000스텝 주행시켜 진짜 실력을 측정했습니다. 성급한 탐험 종료(반감기 2천): <b>${L.data.a.toFixed(2)}바퀴</b> / 충분한 탐험(8천): <b>${L.data.b.toFixed(2)}바퀴</b>. ` +
+        (L.data.b > L.data.a * 1.15
+          ? '탐험에 투자한 시간이 더 나은 정책으로 돌아왔습니다.'
+          : '가설과 달랐나요? 그것이 발견입니다 — 이 게임은 전진할 때마다 보상을 주는 <b>밀집 보상</b> 환경이라 탐험을 일찍 줄여도 배울 수 있습니다. 완주에만 보상을 주는 <b>희소 보상</b> 세계라면 탐험 없이는 첫 보상조차 만나지 못합니다. 문제의 성격이 탐험의 가치를 결정합니다.'));
+    }
+  }
+  if (activeLab === 'hack' && P.rProg === 0 && P.rSpd >= 3 && hackSteps >= 3000) {
+    completeLab(`속도만 보상받은 AI의 최근 완주율: 평균 <b>${avgLast(5).toFixed(2)}바퀴</b>. 차는 빠르게 달리지만 결승선에는 관심이 없습니다 — 측정지표(KPI)를 잘못 주면 AI는 목표가 아니라 지표를 최적화합니다.`);
+  }
+  if (activeLab === 'curriculum') {
+    const since = epCount - trackSwitchEp;
+    if (L.phase === 0 && currentTrackId === 'oval' && since >= 10 && avgLast(Math.min(20, since)) >= 1) {
+      L.data.ovalSteps = stepCount; L.phase = 1;
+      updateLabBar();
+      toast('🪜 기초 과정 수료! 이제 🔴 서펜트로 이동해 이어서 학습하세요');
+    } else if (L.phase === 1 && currentTrackId === 'serpent' && since >= 10 && avgLast(Math.min(20, since)) >= 1) {
+      completeLab(`오벌에서 배운 기초 주행 감각을 딛고 최고 난도 서펜트를 정복했습니다 (누적 ${fmt(stepCount)}스텝). 백지에서 서펜트만 파면 훨씬 오래 걸립니다 — 과제의 사다리가 학습을 가속합니다.`);
+    }
+  }
+}
+function renderLabs() {
+  $('labList').innerHTML = LABS.map(l => {
+    const st = progress.labs[l.id];
+    const running = activeLab === l.id;
+    return `<div class="lab">
+      <div class="hd"><span style="font-size:20px">${l.ic}</span>
+        <span class="ti">${l.title} <span class="muted">· ${l.sub}</span></span>
+        <span class="st ${st && st.done ? 'done' : ''}">${st && st.done ? '✓ 완료' :
+          running ? '<b style="color:var(--purple)">진행 중</b>' :
+          `<button class="small" data-lab="${l.id}">실험 시작</button>`}</span></div>
+      <div class="why">${l.why}</div>
+      ${st && st.done ? `<div class="sum">📌 ${st.summary}</div>` : ''}
+    </div>`;
+  }).join('');
+  $('labList').querySelectorAll('button[data-lab]').forEach(b =>
+    b.addEventListener('click', () => startLab(b.dataset.lab)));
+}
+
+/* ═══════════════════════ UI 상태 ═══════════════════════ */
+let mode = 'train';
+let running = false, demoMode = false, speedSetting = '20';
+let wasRunning = false;
+
+const notesEl = $('notes');
+function note(html, cls) {
+  const d = document.createElement('div');
+  d.className = 'note' + (cls ? ' ' + cls : '');
+  d.innerHTML = '<span class="t">EP' + fmt(epCount) + '</span>' + html;
+  notesEl.prepend(d);
+  while (notesEl.children.length > 60) notesEl.lastChild.remove();
+}
+
+/* ═══════════════════════ 캔버스 ═══════════════════════ */
+const mainC = $('mainCanvas'), netC = $('netCanvas'), chartC = $('chartCanvas');
+const mctx = mainC.getContext('2d'), nctx = netC.getContext('2d'), cctx = chartC.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+function fitCanvases() {
+  mainC.style.aspectRatio = CW + '/' + CH;
+  mainC.width = CW * DPR; mainC.height = CH * DPR;
+  mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  for (const [c, ctx] of [[netC, nctx], [chartC, cctx]]) {
+    const w = c.clientWidth || 290, h = parseInt(c.style.height);
+    c.width = w * DPR; c.height = h * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+}
+window.addEventListener('resize', fitCanvases);
+
+/* ═══════════════════════ 렌더링 ═══════════════════════ */
+function drawTrack(ctx, t) {
+  // 우주 배경 + 스타필드
+  const bg = ctx.createLinearGradient(0, 0, 0, CH);
+  bg.addColorStop(0, '#0a0c12');
+  bg.addColorStop(1, '#10121d');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, CW, CH);
+  for (let i = 0; i < 90; i++) {
+    ctx.fillStyle = `rgba(232,236,244,${0.05 + Math.random() * 0.18})`;
+    ctx.fillRect(Math.random() * CW, Math.random() * CH, Math.random() < 0.2 ? 2 : 1, 1);
+  }
+  // 네온 글로우 (벽 바깥 발광)
+  for (const walls of [t.wallsL, t.wallsR]) {
+    ctx.beginPath();
+    ctx.moveTo(walls[0][0], walls[0][1]);
+    for (let i = 1; i < t.n; i++) ctx.lineTo(walls[i][0], walls[i][1]);
+    ctx.closePath();
+    ctx.shadowColor = 'rgba(84,160,255,.9)';
+    ctx.shadowBlur = 16;
+    ctx.strokeStyle = 'rgba(84,160,255,.25)';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  // 아스팔트
+  ctx.beginPath();
+  ctx.moveTo(t.wallsL[0][0], t.wallsL[0][1]);
+  for (let i = 1; i < t.n; i++) ctx.lineTo(t.wallsL[i][0], t.wallsL[i][1]);
+  ctx.closePath();
+  ctx.moveTo(t.wallsR[0][0], t.wallsR[0][1]);
+  for (let i = t.n - 1; i >= 0; i--) ctx.lineTo(t.wallsR[i][0], t.wallsR[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = '#22262f';
+  ctx.fill('evenodd');
+  // 중앙선
+  ctx.beginPath();
+  ctx.setLineDash([8, 10]);
+  ctx.moveTo(t.pts[0][0], t.pts[0][1]);
+  for (let i = 1; i < t.n; i++) ctx.lineTo(t.pts[i][0], t.pts[i][1]);
+  ctx.closePath();
+  ctx.strokeStyle = 'rgba(254,202,87,.13)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 연석 (커브 구간 빨강/흰 줄무늬)
+  for (const walls of [t.wallsL, t.wallsR]) {
+    for (let i = 0; i < t.n; i++) {
+      const p0 = walls[(i - 1 + t.n) % t.n], p1 = walls[i], p2 = walls[(i + 1) % t.n];
+      let da = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) - Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
+      while (da > Math.PI) da -= 2 * Math.PI;
+      while (da < -Math.PI) da += 2 * Math.PI;
+      if (Math.abs(da) > 0.045) {
+        ctx.strokeStyle = i % 2 === 0 ? '#e74c3c' : '#ecf0f1';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.lineTo(p2[0], p2[1]);
+        ctx.stroke();
+      }
+    }
+  }
+  // 벽 본선
+  for (const walls of [t.wallsL, t.wallsR]) {
+    ctx.beginPath();
+    ctx.moveTo(walls[0][0], walls[0][1]);
+    for (let i = 1; i < t.n; i++) ctx.lineTo(walls[i][0], walls[i][1]);
+    ctx.closePath();
+    ctx.strokeStyle = '#78849c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  // 출발선
+  const p = t.pts[0], q = t.pts[1];
+  let tx = q[0] - p[0], ty = q[1] - p[1];
+  const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+  const nx = -ty, ny = tx;
+  const cells = 8, cw2 = (t.hw * 2) / cells;
+  for (let i = 0; i < cells; i++) {
+    for (let j = 0; j < 2; j++) {
+      ctx.fillStyle = (i + j) % 2 === 0 ? '#e8ecf4' : '#12141a';
+      const ox = p[0] + nx * (-t.hw + i * cw2), oy = p[1] + ny * (-t.hw + i * cw2);
+      ctx.save();
+      ctx.translate(ox + tx * j * 5, oy + ty * j * 5);
+      ctx.rotate(Math.atan2(ty, tx));
+      ctx.fillRect(0, 0, 5, cw2);
+      ctx.restore();
+    }
+  }
+}
+function drawCar(ctx, car, color, showRays) {
+  if (showRays) {
+    for (let i = 0; i < RAYS.length; i++) {
+      const d = car.rayD[i];
+      const a = car.heading + RAYS[i];
+      const f = d / RAY_MAX;
+      ctx.strokeStyle = `hsla(${f * 110},80%,55%,.45)`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(car.x, car.y);
+      ctx.lineTo(car.x + Math.cos(a) * d, car.y + Math.sin(a) * d);
+      ctx.stroke();
+      if (d < RAY_MAX) {
+        ctx.fillStyle = `hsla(${f * 110},80%,60%,.9)`;
+        ctx.beginPath();
+        ctx.arc(car.x + Math.cos(a) * d, car.y + Math.sin(a) * d, 2.2, 0, 7);
+        ctx.fill();
+      }
+    }
+  }
+  if (car.trail.length > 1) {
+    ctx.strokeStyle = color + '44';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(car.trail[0][0], car.trail[0][1]);
+    for (let i = 1; i < car.trail.length; i++) ctx.lineTo(car.trail[i][0], car.trail[i][1]);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.heading);
+  // 부스터 화염 (고속 주행)
+  if (car.speed > 3.0) {
+    const fl = 6 + Math.random() * 8 * (car.speed / MAX_SPD);
+    const flame = ctx.createLinearGradient(-7, 0, -7 - fl, 0);
+    flame.addColorStop(0, 'rgba(254,202,87,.95)');
+    flame.addColorStop(0.5, 'rgba(255,107,107,.5)');
+    flame.addColorStop(1, 'rgba(255,107,107,0)');
+    ctx.fillStyle = flame;
+    ctx.beginPath();
+    ctx.moveTo(-6, -2.6); ctx.lineTo(-7 - fl, 0); ctx.lineTo(-6, 2.6);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  const body = ctx.createLinearGradient(0, -6, 0, 6);
+  body.addColorStop(0, '#ffffff');
+  body.addColorStop(0.3, color);
+  body.addColorStop(1, color);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.moveTo(10, 0); ctx.lineTo(-7, -6); ctx.lineTo(-4, 0); ctx.lineTo(-7, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(18,20,26,.75)'; // 콕핏
+  ctx.beginPath();
+  ctx.arc(1.5, 0, 2.2, 0, 7);
+  ctx.fill();
+  ctx.restore();
+}
+function pushTrail(car) {
+  car.trail.push([car.x, car.y]);
+  if (car.trail.length > 90) car.trail.shift();
+}
+function drawCrashFx(ctx) {
+  const fx = env.crashFx;
+  if (!fx || fx.t <= 0) return;
+  const p = 1 - fx.t / 16;
+  ctx.strokeStyle = `rgba(255,107,107,${1 - p})`;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(fx.x, fx.y, 4 + p * 26, 0, 7);
+  ctx.stroke();
+  ctx.fillStyle = `rgba(255,159,67,${1 - p})`;
+  for (const s of fx.parts) {
+    s.x += s.vx; s.y += s.vy; s.vx *= 0.92; s.vy *= 0.92;
+    ctx.fillRect(s.x - 1.5, s.y - 1.5, 3, 3);
+  }
+  fx.t--;
+}
+
+/* 가치 함수 히트맵 — AI가 트랙 각 지점에 매긴 가치 V(s)=maxQ */
+let heatmapOn = false, heatCache = null, heatCounter = 0;
+const heatCar = makeCar(), heatState = new Float32Array(DIM);
+function computeHeatmap() {
+  const t = env.track, out = [];
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < t.n; i += 3) {
+    const p = t.pts[i], q = t.pts[(i + 1) % t.n];
+    let tx = q[0] - p[0], ty = q[1] - p[1];
+    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    for (const f of [-0.55, 0, 0.55]) {
+      heatCar.x = p[0] - ty * t.hw * f; heatCar.y = p[1] + tx * t.hw * f;
+      heatCar.heading = Math.atan2(ty, tx); heatCar.speed = MAX_SPD * 0.8;
+      computeState(t, heatCar, heatState);
+      const qv = net.forward(heatState);
+      let v = qv[0];
+      for (let k = 1; k < NA; k++) if (qv[k] > v) v = qv[k];
+      out.push([heatCar.x, heatCar.y, v]);
+      if (v < mn) mn = v; if (v > mx) mx = v;
+    }
+  }
+  heatCache = { pts: out, mn, mx };
+}
+function drawHeatmap(ctx) {
+  if (!heatCache) return;
+  const { pts, mn, mx } = heatCache, rng = (mx - mn) || 1;
+  for (const [x, y, v] of pts) {
+    const f = (v - mn) / rng;
+    ctx.fillStyle = `hsla(${f * 120},85%,55%,.38)`;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, 7);
+    ctx.fill();
+  }
+}
+
+/* ═══════════════════════ 🎮 게임 필: 레이어·이펙트·HUD·어트랙트·BGM ═══════════════════════ */
+let trackLayer = null, skidLayer = null, skidCtx = null;
+let shakeAmt = 0, recordStampT = 0, finalLapT = 0;
+let confetti = [];
+function renderTrackLayer() { // 트랙을 오프스크린에 1회 프리렌더 (네온·연석·스타필드)
+  trackLayer = document.createElement('canvas');
+  trackLayer.width = CW * DPR; trackLayer.height = CH * DPR;
+  const ctx = trackLayer.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawTrack(ctx, env.track);
+  skidLayer = document.createElement('canvas');
+  skidLayer.width = CW * DPR; skidLayer.height = CH * DPR;
+  skidCtx = skidLayer.getContext('2d');
+  skidCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+function addSkid(car) { // 급조향 스키드 마크 누적
+  if (!skidCtx || Math.abs(car.lastSteer || 0) < 0.7 || car.speed < 2.5) return;
+  if (Math.hypot(car.x - car.px, car.y - car.py) > 8) return; // 고속 시뮬 점프 방지
+  const nx = -Math.sin(car.heading), ny = Math.cos(car.heading);
+  skidCtx.strokeStyle = 'rgba(8,10,14,.5)';
+  skidCtx.lineWidth = 2;
+  for (const o of [-3.5, 3.5]) {
+    skidCtx.beginPath();
+    skidCtx.moveTo(car.px + nx * o, car.py + ny * o);
+    skidCtx.lineTo(car.x + nx * o, car.y + ny * o);
+    skidCtx.stroke();
+  }
+}
+function fadeSkid() {
+  if (!skidCtx) return;
+  skidCtx.save();
+  skidCtx.globalCompositeOperation = 'destination-out';
+  skidCtx.fillStyle = 'rgba(0,0,0,.012)';
+  skidCtx.fillRect(0, 0, CW, CH);
+  skidCtx.restore();
+}
+function spawnConfetti() {
+  const colors = ['#ff9f43', '#feca57', '#54a0ff', '#2ecc71', '#ff6b6b', '#a29bfe'];
+  for (let i = 0; i < 130; i++) confetti.push({
+    x: Math.random() * CW, y: -10 - Math.random() * 80,
+    vx: (Math.random() - 0.5) * 1.6, vy: 1 + Math.random() * 2.2,
+    rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.25,
+    color: colors[(Math.random() * colors.length) | 0], life: 260,
+  });
+}
+function drawSpeedo(car) { // 속도계 게이지
+  const cx = CW - 74, cy = CH - 64, R = 44;
+  const f = clamp(car.speed / MAX_SPD, 0, 1);
+  mctx.save();
+  mctx.globalAlpha = 0.92;
+  mctx.beginPath();
+  mctx.arc(cx, cy, R, Math.PI * 0.75, Math.PI * 2.25);
+  mctx.strokeStyle = 'rgba(36,40,52,.9)';
+  mctx.lineWidth = 10;
+  mctx.stroke();
+  mctx.beginPath();
+  mctx.arc(cx, cy, R, Math.PI * 0.75, Math.PI * (0.75 + 1.5 * f));
+  mctx.strokeStyle = f > 0.85 ? '#ff6b6b' : '#54a0ff';
+  mctx.lineWidth = 10;
+  mctx.stroke();
+  mctx.font = '900 20px sans-serif';
+  mctx.textAlign = 'center';
+  mctx.fillStyle = '#e8ecf4';
+  mctx.fillText(Math.round(f * 240), cx, cy + 6);
+  mctx.font = '10px sans-serif';
+  mctx.fillStyle = '#9aa3b5';
+  mctx.fillText('km/h', cx, cy + 20);
+  mctx.restore();
+}
+function drawHud() { // 흔들림 영향을 받지 않는 오버레이 (콘페티·게이지·배너·스탬프)
+  if (confetti.length) {
+    confetti.forEach(c => { c.x += c.vx; c.y += c.vy; c.vy += 0.12; c.rot += c.vr; c.life--; });
+    confetti = confetti.filter(c => c.life > 0 && c.y < CH + 12);
+    for (const c of confetti) {
+      mctx.save();
+      mctx.translate(c.x, c.y);
+      mctx.rotate(c.rot);
+      mctx.fillStyle = c.color;
+      mctx.fillRect(-3, -2, 6, 4);
+      mctx.restore();
+    }
+  }
+  if (mode === 'race' && race.active && (race.phase === 'run' || race.phase === 'celebrate')) {
+    drawSpeedo(race.player);
+    if (race.phase === 'run' && !race.spectate) {
+      const ahead = race.pProg >= race.aProg;
+      const gap = Math.abs(race.pProg - race.aProg) / (3.2 * 60);
+      mctx.font = '900 26px sans-serif';
+      mctx.textAlign = 'right';
+      mctx.fillStyle = ahead ? '#feca57' : '#9aa3b5';
+      mctx.fillText(ahead ? 'P1' : 'P2', CW - 18, 40);
+      mctx.font = '12px sans-serif';
+      mctx.fillStyle = '#9aa3b5';
+      mctx.fillText((ahead ? '+' : '−') + gap.toFixed(1) + 's', CW - 18, 58);
+    }
+    if (finalLapT > 0) {
+      finalLapT--;
+      mctx.font = '900 44px sans-serif';
+      mctx.textAlign = 'center';
+      mctx.fillStyle = `rgba(254,202,87,${Math.min(1, finalLapT / 20)})`;
+      mctx.shadowColor = '#feca57';
+      mctx.shadowBlur = 18;
+      mctx.fillText('FINAL LAP!', CW / 2, 92);
+      mctx.shadowBlur = 0;
+    }
+    if (race.phase === 'celebrate') {
+      mctx.font = '900 56px sans-serif';
+      mctx.textAlign = 'center';
+      mctx.fillStyle = race.celebrateWin ? '#feca57' : '#9aa3b5';
+      mctx.shadowColor = race.celebrateWin ? '#feca57' : '#54a0ff';
+      mctx.shadowBlur = 24;
+      mctx.fillText(race.celebrateText, CW / 2, CH / 2 - 8);
+      mctx.shadowBlur = 0;
+    }
+  }
+  if (recordStampT > 0) {
+    recordStampT--;
+    const a = Math.min(1, recordStampT / 25);
+    mctx.save();
+    mctx.translate(CW / 2, 152);
+    mctx.rotate(-0.07);
+    mctx.font = '900 32px sans-serif';
+    mctx.textAlign = 'center';
+    mctx.fillStyle = `rgba(46,204,113,${a})`;
+    mctx.strokeStyle = `rgba(46,204,113,${a})`;
+    mctx.lineWidth = 3;
+    mctx.strokeRect(-150, -30, 300, 44);
+    mctx.fillText('NEW RECORD!', 0, 4);
+    mctx.restore();
+  }
+  if (shakeAmt > 1.5) { // 충돌 붉은 비네트
+    const vg = mctx.createRadialGradient(CW / 2, CH / 2, CH / 2.6, CW / 2, CH / 2, CH / 1.05);
+    vg.addColorStop(0, 'rgba(255,60,60,0)');
+    vg.addColorStop(1, `rgba(255,60,60,${Math.min(0.35, shakeAmt / 40)})`);
+    mctx.fillStyle = vg;
+    mctx.fillRect(0, 0, CW, CH);
+  }
+}
+/* 어트랙트 모드: 타이틀 화면 뒤에서 사전 학습 AI가 시범 주행 */
+const attract = { on: false, car: makeCar(), net: null, st: new Float32Array(DIM) };
+function startAttract() {
+  if (!PRETRAINED) return;
+  attract.net = new MLP(SIZES);
+  attract.net.loadJSON(PRETRAINED.net);
+  placeCarAt(env.track, attract.car, 0, 0, 0);
+  attract.on = true;
+}
+function attractStep() {
+  const c = attract.car;
+  computeState(env.track, c, attract.st);
+  const a = argmax(attract.net.forward(attract.st));
+  stepCarPhysics(c, STEERS[a]);
+  const cand = candidates(env.track, c.x, c.y, RAY_MAX + 10);
+  if (carCollides(env.track, c.px, c.py, c.x, c.y, CAR_R, cand)) placeCarAt(env.track, c, 0, 0, 0);
+  pushTrail(c);
+}
+/* BGM: Web Audio 신스 시퀀서 (에셋 0, 칩튠 루프) */
+const music = {
+  timer: null, step: 0,
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.tick(), 132);
+  },
+  tick() {
+    if (!audio.ctx || !settings.sound || !settings.music || document.hidden) return;
+    const s = this.step++;
+    const BASS = [110, 110, 130.8, 98]; // A - A - C - G
+    if (s % 4 === 0) audio.blip(BASS[(s >> 4) % 4] / 2, 0.3, 'triangle', 0.055);
+    const ARP = [220, 261.6, 329.6, 440, 329.6, 261.6, 392, 329.6]; // Am 아르페지오
+    audio.blip(ARP[s % 8], 0.1, 'square', 0.016);
+    if (s % 16 === 8) audio.blip(587.3, 0.14, 'sine', 0.02);
+  }
+};
+
+/* 신경망 시각화 */
+const vizActs = SIZES.map(n => new Float32Array(n));
+const OUT_LABELS = ['⟸', '←', '↑', '→', '⟹'];
+const IN_LABELS = ['L75', 'L45', 'L20', ' 0°', 'R20', 'R45', 'R75', 'SPD'];
+function drawNet() {
+  const w = netC.width / DPR, h = netC.height / DPR;
+  nctx.clearRect(0, 0, w, h);
+  net.forward(env.state, vizActs);
+  const cols = SIZES.length;
+  const colX = [], pad = 34;
+  for (let c = 0; c < cols; c++) colX.push(pad + (w - pad * 2) * c / (cols - 1));
+  const pos = [];
+  for (let c = 0; c < cols; c++) {
+    const n = SIZES[c], col = [];
+    for (let i = 0; i < n; i++) col.push([colX[c], 14 + (h - 28) * (n === 1 ? 0.5 : i / (n - 1))]);
+    pos.push(col);
+  }
+  for (let l = 0; l < net.L; l++) {
+    const nin = SIZES[l], nout = SIZES[l + 1], W = net.W[l];
+    for (let j = 0; j < nout; j++) {
+      for (let i = 0; i < nin; i++) {
+        const wv = W[j * nin + i];
+        const m = Math.abs(wv);
+        if (m < 0.18) continue;
+        nctx.strokeStyle = wv > 0 ? `rgba(84,160,255,${Math.min(0.55, m * 0.5)})` : `rgba(255,107,107,${Math.min(0.55, m * 0.5)})`;
+        nctx.lineWidth = Math.min(2, m * 0.9);
+        nctx.beginPath();
+        nctx.moveTo(pos[l][i][0], pos[l][i][1]);
+        nctx.lineTo(pos[l + 1][j][0], pos[l + 1][j][1]);
+        nctx.stroke();
+      }
+    }
+  }
+  const qOut = vizActs[SIZES.length - 1];
+  const bestA = argmax(qOut);
+  for (let c = 0; c < cols; c++) {
+    const acts = vizActs[c];
+    let mx = 0.001;
+    for (let i = 0; i < acts.length; i++) mx = Math.max(mx, Math.abs(acts[i]));
+    for (let i = 0; i < acts.length; i++) {
+      const v = clamp(Math.abs(acts[i]) / mx, 0, 1);
+      const [x, y] = pos[c][i];
+      const r = c === cols - 1 ? 7 : 5;
+      nctx.beginPath();
+      nctx.arc(x, y, r, 0, 7);
+      if (c === cols - 1 && i === bestA) {
+        nctx.fillStyle = '#feca57';
+        nctx.shadowColor = '#feca57'; nctx.shadowBlur = 8;
+      } else {
+        nctx.fillStyle = `rgba(${c === cols - 1 ? '255,159,67' : '232,236,244'},${0.15 + v * 0.85})`;
+        nctx.shadowBlur = 0;
+      }
+      nctx.fill();
+      nctx.shadowBlur = 0;
+      nctx.fillStyle = '#9aa3b5';
+      nctx.font = '9px monospace';
+      if (c === 0) { nctx.textAlign = 'right'; nctx.fillText(IN_LABELS[i], x - 9, y + 3); }
+      if (c === cols - 1) { nctx.textAlign = 'left'; nctx.fillText(OUT_LABELS[i], x + 11, y + 4); }
+    }
+  }
+}
+
+/* 학습 곡선 */
+function drawChart() {
+  const w = chartC.width / DPR, h = chartC.height / DPR;
+  cctx.clearRect(0, 0, w, h);
+  const data = epHistory.slice(-300);
+  if (data.length < 2) {
+    cctx.fillStyle = '#9aa3b5';
+    cctx.font = '12px sans-serif';
+    cctx.textAlign = 'center';
+    cctx.fillText('학습을 시작하면 곡선이 그려집니다', w / 2, h / 2);
+    return;
+  }
+  let mx = 1;
+  for (const e of data) mx = Math.max(mx, e.laps);
+  const X = i => 6 + (w - 12) * i / (data.length - 1);
+  const Y = v => h - 8 - (h - 20) * v / mx;
+  if (mx >= 1) {
+    cctx.strokeStyle = 'rgba(46,204,113,.35)';
+    cctx.setLineDash([4, 4]);
+    cctx.beginPath(); cctx.moveTo(0, Y(1)); cctx.lineTo(w, Y(1)); cctx.stroke();
+    cctx.setLineDash([]);
+    cctx.fillStyle = 'rgba(46,204,113,.7)';
+    cctx.font = '10px sans-serif'; cctx.textAlign = 'left';
+    cctx.fillText('1바퀴', 4, Y(1) - 3);
+  }
+  cctx.strokeStyle = 'rgba(154,163,181,.35)';
+  cctx.lineWidth = 1;
+  cctx.beginPath();
+  data.forEach((e, i) => i === 0 ? cctx.moveTo(X(i), Y(Math.max(0, e.laps))) : cctx.lineTo(X(i), Y(Math.max(0, e.laps))));
+  cctx.stroke();
+  cctx.strokeStyle = '#ff9f43';
+  cctx.lineWidth = 2;
+  cctx.beginPath();
+  let sum = 0;
+  const qn = [];
+  data.forEach((e, i) => {
+    qn.push(e.laps); sum += e.laps;
+    if (qn.length > 20) sum -= qn.shift();
+    const v = Math.max(0, sum / qn.length);
+    i === 0 ? cctx.moveTo(X(i), Y(v)) : cctx.lineTo(X(i), Y(v));
+  });
+  cctx.stroke();
+}
+
+function updateStats() {
+  $('stEp').textContent = fmt(epCount);
+  $('stSteps').textContent = fmt(stepCount);
+  $('stEps').textContent = eps.toFixed(2);
+  $('stEpsBar').style.width = (eps * 100) + '%';
+  $('stBuf').textContent = fmt(replay.n);
+  const last = epHistory.slice(-20);
+  const avg = last.length ? last.reduce((a, e) => a + e.laps, 0) / last.length : 0;
+  $('stAvg').textContent = avg.toFixed(2);
+  $('stBest').textContent = bestLaps.toFixed(2);
+  $('stLoss').textContent = lossAvg ? lossAvg.toFixed(3) : '-';
+}
+
+/* ═══════════════════════ 레이스 모드 ═══════════════════════ */
+const race = {
+  active: false, phase: 'idle',
+  player: makeCar(), ai: makeCar(),
+  pIdx: 0, aIdx: 0, pProg: 0, aProg: 0, pS: 0, aS: 0,
+  pSteer: 0, keys: {}, countT: 0, ticks: 0, lastCount: -1,
+  pLaps: [], aLaps: [], lapTarget: 3, pCrashes: 0,
+  spectate: false, rival: null,
+  aiState: new Float32Array(DIM),
+};
+const rivalState = new Float32Array(DIM);
+let rivalLabel = '상대 AI';
+function startRace() {
+  const t = env.track;
+  race.pIdx = placeCarAt(t, race.player, 0, -t.hw * 0.4, 0);
+  race.aIdx = placeCarAt(t, race.ai, 0, t.hw * 0.4, 0);
+  race.player.speed = 0; race.ai.speed = 0;
+  race.player.stun = 0; race.ai.stun = 0;
+  race.pS = 0; race.aS = 0; race.pProg = 0; race.aProg = 0;
+  race.pLaps = []; race.aLaps = [];
+  race.pSteer = 0; race.pCrashes = 0; race.lastCount = -1; race.ticks = 0;
+  race.trace = []; // 👻 고스트 기록 (1랩, 2틱마다)
+  race.hitStop = 0; race.celebrateT = 0;
+  finalLapT = 0; confetti.length = 0;
+  race.phase = 'count'; race.countT = 180; race.active = true;
+  computeState(t, race.ai, race.aiState);
+  computeState(t, race.player, race.aiState);
+  $('raceHud').style.display = 'block';
+  if (isTouch && !race.spectate) $('touchBtns').style.display = 'flex';
+}
+// AI vs AI 관전 대결: 파란 차를 상대 신경망이 조종
+function startRaceVs(modelJson, label) {
+  try {
+    const rn = new MLP(SIZES);
+    rn.loadJSON(modelJson.net || modelJson);
+    race.rival = rn;
+  } catch (e) { note('🤖 상대 모델을 읽을 수 없습니다: ' + e.message, 'sys'); return; }
+  rivalLabel = label;
+  race.spectate = true;
+  setMode('race');
+  startRace();
+}
+function raceCarStep(car, steer) {
+  if (car.stun > 0) { car.stun--; return false; }
+  const t = env.track;
+  stepCarPhysics(car, steer);
+  const cand = candidates(t, car.x, car.y, RAY_MAX + 10);
+  if (carCollides(t, car.px, car.py, car.x, car.y, CAR_R, cand)) {
+    const idx = globalNearest(t, car.px, car.py);
+    placeCarAt(t, car, t.cum[idx], 0, 0);
+    car.speed = 0;
+    car.stun = 45;
+    audio.crash();
+    return true;
+  }
+  return false;
+}
+function raceProgress(car, key) {
+  const t = env.track;
+  const pr = projectProgress(t, car.x, car.y, race[key + 'Idx']);
+  race[key + 'Idx'] = pr.idx;
+  let d = pr.s - race[key + 'S'];
+  if (d > t.len / 2) d -= t.len;
+  if (d < -t.len / 2) d += t.len;
+  race[key + 'S'] = pr.s;
+  const before = Math.floor(race[key + 'Prog'] / t.len);
+  race[key + 'Prog'] += d;
+  const after = Math.floor(race[key + 'Prog'] / t.len);
+  if (after > before && after >= 1) {
+    const laps = race[key + 'Laps'];
+    // 시뮬레이션 틱 기준 랩타임 (60틱 = 1초) — 프레임 드랍에도 공정
+    const t0 = laps.length ? laps[laps.length - 1].tick : 0;
+    laps.push({ time: (race.ticks - t0) / 60, tick: race.ticks });
+    if (key === 'p') {
+      audio.lap();
+      if (!race.spectate && laps.length === race.lapTarget - 1) finalLapT = 110; // FINAL LAP 배너
+    }
+  }
+}
+function raceStep() {
+  if (race.phase === 'count') {
+    race.countT--;
+    const cd = $('countdown');
+    cd.style.display = 'flex';
+    const n = Math.ceil(race.countT / 60);
+    cd.textContent = race.countT <= 0 ? 'GO!' : n;
+    if (race.countT > 0 && n !== race.lastCount) { race.lastCount = n; audio.count(false); }
+    if (race.countT === 0) audio.count(true);
+    if (race.countT <= -30) {
+      cd.style.display = 'none';
+      race.phase = 'run';
+      race.ticks = 0;
+    }
+    return;
+  }
+  if (race.phase === 'celebrate') { // 결과창 전 세리머니 연출
+    if (--race.celebrateT <= 0) {
+      race.phase = 'done';
+      $('raceOverlay').classList.remove('hidden');
+    }
+    return;
+  }
+  if (race.phase !== 'run') return;
+  if (race.hitStop > 0) { race.hitStop--; return; } // 충돌 히트스톱 (찰나의 시간 정지)
+  race.ticks++;
+  const t = env.track;
+  if (race.spectate && race.rival) {
+    if (race.player.stun > 0) { race.player.stun--; }
+    else {
+      computeState(t, race.player, rivalState);
+      const ra = argmax(race.rival.forward(rivalState));
+      if (raceCarStep(race.player, STEERS[ra])) { race.pCrashes++; shakeAmt = 8; }
+    }
+  } else {
+    let key = 0;
+    if (race.keys['ArrowLeft'] || race.keys['KeyA'] || race.keys['tL']) key -= 1;
+    if (race.keys['ArrowRight'] || race.keys['KeyD'] || race.keys['tR']) key += 1;
+    race.pSteer += (key - race.pSteer) * 0.3;
+    if (raceCarStep(race.player, race.pSteer)) { race.pCrashes++; shakeAmt = 13; race.hitStop = 7; }
+  }
+  raceProgress(race.player, 'p');
+  pushTrail(race.player);
+  if (!race.spectate && race.pLaps.length === 0 && (race.ticks & 1) === 0)
+    race.trace.push([race.player.x | 0, race.player.y | 0, +race.player.heading.toFixed(3)]);
+  if (race.ai.stun > 0) { race.ai.stun--; }
+  else {
+    computeState(t, race.ai, race.aiState);
+    const a = argmax(net.forward(race.aiState));
+    if (raceCarStep(race.ai, STEERS[a])) shakeAmt = Math.max(shakeAmt, 6);
+  }
+  raceProgress(race.ai, 'a');
+  pushTrail(race.ai);
+  computeState(t, race.player, race.aiState);
+  $('raceHud').innerHTML =
+    '⏱ <b>' + (race.ticks / 60).toFixed(1) + 's</b><br>' +
+    '🔵 ' + (race.spectate ? rivalLabel : '나') + ': <b>' + Math.min(race.lapTarget, race.pLaps.length) + '/' + race.lapTarget + '</b> 바퀴<br>' +
+    '🟠 ' + (race.spectate ? '내 AI' : 'AI') + ': <b>' + Math.min(race.lapTarget, race.aLaps.length) + '/' + race.lapTarget + '</b> 바퀴';
+  if (race.pLaps.length >= race.lapTarget || race.aLaps.length >= race.lapTarget) {
+    const pWin = race.pLaps.length >= race.lapTarget;
+    race.phase = 'celebrate'; // 결과창 전 세리머니
+    race.celebrateT = 110;
+    race.celebrateWin = race.spectate ? true : pWin;
+    race.celebrateText = race.spectate ? 'FINISH!' : (pWin ? 'YOU WIN!' : 'AI WINS');
+    if (!race.spectate && pWin) spawnConfetti();
+    if (!race.spectate) {
+      if (pWin) { unlock('beat-ai'); if (race.pCrashes === 0) unlock('no-stun'); audio.win(); }
+      else if (race.pCrashes === 0 && race.pLaps.length >= 1) unlock('no-stun');
+      updateRecords();
+      maybeSaveGhost();
+    } else audio.win();
+    labEvent('race-end', { pWin, spectate: race.spectate });
+    $('raceTitle').textContent = race.spectate
+      ? (pWin ? '🔵 ' + rivalLabel + ' 승리!' : '🟠 내 AI 승리!')
+      : (pWin ? '🎉 승리! AI를 이겼습니다!' : '🤖 AI 승리!');
+    const fmtLaps = laps => laps.map((l, i) => `${i + 1}랩 ${l.time.toFixed(1)}s`).join(' · ') || '-';
+    $('raceResult').innerHTML =
+      '🔵 ' + (race.spectate ? rivalLabel : '나') + ': ' + fmtLaps(race.pLaps) +
+      '<br>🟠 ' + (race.spectate ? '내 AI' : 'AI') + ': ' + fmtLaps(race.aLaps) +
+      (race.spectate
+        ? '<br><br>훈련량과 트랙 경험이 승부를 가릅니다 — 내 AI를 더 단련시켜서 다시 겨뤄 보세요!'
+        : (pWin ? '<br><br>훈련을 더 시키면 AI가 강해집니다. 다시 도전해 보세요!' : '<br><br>당신이 키운 AI가 당신을 이겼습니다 — 강화학습의 힘!'));
+    $('raceHud').style.display = 'none';
+    $('touchBtns').style.display = 'none';
+  }
+}
+function bestLapOf(laps) {
+  return laps.length ? Math.min(...laps.map(l => l.time)) : null;
+}
+/* 👻 고스트: 출발선부터 1랩째 주행을 기록, 최고 기록이면 저장 */
+function maybeSaveGhost() {
+  if (race.spectate || race.pLaps.length < 1 || !race.trace.length) return;
+  const t1 = race.pLaps[0].time;
+  const g = progress.ghosts[currentTrackId];
+  if (!g || t1 < g.time) {
+    progress.ghosts[currentTrackId] = { time: +t1.toFixed(2), pts: race.trace };
+    saveProgress();
+    toast('👻 <b>고스트 갱신!</b> 1랩 ' + t1.toFixed(2) + 's — 다음 레이스에서 함께 달립니다');
+  }
+}
+function updateRecords() {
+  const r = progress.records[currentTrackId] || {};
+  const pb = bestLapOf(race.pLaps), ab = bestLapOf(race.aLaps);
+  let newRec = false;
+  if (pb !== null && (r.p === undefined || pb < r.p)) { r.p = +pb.toFixed(2); newRec = true; }
+  if (ab !== null && (r.a === undefined || ab < r.a)) { r.a = +ab.toFixed(2); }
+  progress.records[currentTrackId] = r;
+  saveProgress();
+  if (newRec) {
+    toast('⏱ <b>개인 최고 랩 신기록!</b> ' + r.p.toFixed(2) + 's');
+    recordStampT = 140; // NEW RECORD! 스탬프 연출
+  }
+  renderRecords();
+}
+function renderRecords() {
+  const r = progress.records[currentTrackId];
+  const nm = trackDisplayName(currentTrackId);
+  const g = progress.ghosts[currentTrackId];
+  $('recBox').innerHTML = (r
+    ? `<b>${nm}</b> 트랙 최고 랩<br>🔵 나: <b>${r.p !== undefined ? r.p.toFixed(2) + 's' : '-'}</b> · 🟠 AI: <b>${r.a !== undefined ? r.a.toFixed(2) + 's' : '-'}</b>`
+    : `<b>${nm}</b> 트랙 — 아직 랩 기록이 없습니다.`)
+    + `<br>👻 고스트(1랩): <b>${g ? g.time.toFixed(2) + 's' : '없음'}</b>${g ? ' — 레이스에서 함께 달립니다' : ' — 1랩을 완주하면 생깁니다'}`;
+}
+
+/* ═══════════════════════ 트랙 편집/선택 ═══════════════════════ */
+/* ═══════════════════════ 🏆 AI 리그 (라운드 로빈 토너먼트) ═══════════════════════ */
+let leagueEntries = [], lastLeague = null;
+function leagueInit() {
+  const mine = new MLP(SIZES);
+  mine.loadJSON(net.toJSON()); // 스냅샷 (리그 중 학습돼도 고정)
+  leagueEntries = [{ name: '내 AI', net: mine }];
+  if (PRETRAINED) {
+    const c = new MLP(SIZES);
+    c.loadJSON(PRETRAINED.net);
+    leagueEntries.push({ name: '챔피언', net: c });
+  }
+  renderLeague();
+}
+function renderLeague() {
+  $('leagueList').innerHTML = leagueEntries.map((e, i) =>
+    `<span class="chip">${e.removable ? '📁 ' : ''}${e.name}${e.removable ? ` <a data-rm="${i}">✕</a>` : ''}</span>`).join(' ')
+    + `<span class="muted" style="margin-left:6px">${leagueEntries.length}명 참가</span>`;
+}
+// 두 신경망의 3바퀴 헤드리스 대전 (렌더 없이 초고속 시뮬레이션)
+function simulateMatch(nA, nB, maxTicks = 4500) {
+  const t = env.track;
+  const cars = [makeCar(), makeCar()];
+  placeCarAt(t, cars[0], 0, -t.hw * 0.4, 0);
+  placeCarAt(t, cars[1], 0, t.hw * 0.4, 0);
+  cars.forEach(c => c.speed = 0);
+  const nets = [nA, nB];
+  const st = new Float32Array(DIM);
+  const S = [{ idx: 0, s: 0, prog: 0, fin: 0 }, { idx: 0, s: 0, prog: 0, fin: 0 }];
+  for (let k = 0; k < 2; k++) {
+    const pr = projectProgress(t, cars[k].x, cars[k].y, 0);
+    S[k].idx = pr.idx; S[k].s = pr.s;
+  }
+  for (let tick = 1; tick <= maxTicks; tick++) {
+    for (let k = 0; k < 2; k++) {
+      const c = cars[k], ss = S[k];
+      if (ss.fin) continue;
+      if (c.stun > 0) { c.stun--; continue; }
+      computeState(t, c, st);
+      const a = argmax(nets[k].forward(st));
+      stepCarPhysics(c, STEERS[a]);
+      const cand = candidates(t, c.x, c.y, RAY_MAX + 10);
+      if (carCollides(t, c.px, c.py, c.x, c.y, CAR_R, cand)) {
+        const gi = globalNearest(t, c.px, c.py);
+        placeCarAt(t, c, t.cum[gi], 0, 0);
+        c.speed = 0; c.stun = 45;
+        const pr0 = projectProgress(t, c.x, c.y, gi);
+        ss.idx = pr0.idx; ss.s = pr0.s;
+        continue;
+      }
+      const pr = projectProgress(t, c.x, c.y, ss.idx);
+      ss.idx = pr.idx;
+      let d = pr.s - ss.s;
+      if (d > t.len / 2) d -= t.len;
+      if (d < -t.len / 2) d += t.len;
+      ss.s = pr.s; ss.prog += d;
+      if (!ss.fin && ss.prog >= t.len * 3) ss.fin = tick;
+    }
+    if (S[0].fin && S[1].fin) break;
+  }
+  let winner;
+  if (S[0].fin && (!S[1].fin || S[0].fin < S[1].fin)) winner = 0;
+  else if (S[1].fin && (!S[0].fin || S[1].fin < S[0].fin)) winner = 1;
+  else if (!S[0].fin && !S[1].fin)
+    winner = S[0].prog > S[1].prog + 1 ? 0 : S[1].prog > S[0].prog + 1 ? 1 : 2;
+  else winner = 2;
+  return { winner, progA: S[0].prog / t.len, progB: S[1].prog / t.len, finA: S[0].fin, finB: S[1].fin };
+}
+async function runLeague() {
+  const n = leagueEntries.length;
+  if (n < 2) { $('leagueStatus').textContent = '참가자가 2명 이상 필요합니다.'; return; }
+  $('btnLeagueRun').disabled = true;
+  const stats = leagueEntries.map(e => ({ name: e.name, w: 0, d: 0, l: 0, pts: 0, prog: 0 }));
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    $('leagueStatus').textContent = `⚔️ 대전 중… ${leagueEntries[i].name} vs ${leagueEntries[j].name}`;
+    await new Promise(r => setTimeout(r, 20)); // UI 갱신 여유
+    const m = simulateMatch(leagueEntries[i].net, leagueEntries[j].net);
+    stats[i].prog += m.progA; stats[j].prog += m.progB;
+    if (m.winner === 0) { stats[i].w++; stats[i].pts += 3; stats[j].l++; }
+    else if (m.winner === 1) { stats[j].w++; stats[j].pts += 3; stats[i].l++; }
+    else { stats[i].d++; stats[j].d++; stats[i].pts++; stats[j].pts++; }
+  }
+  stats.sort((a, b) => b.pts - a.pts || b.prog - a.prog);
+  lastLeague = { standings: stats, track: trackDisplayName(currentTrackId) };
+  $('leagueStatus').innerHTML = `🏆 우승: <b style="color:var(--gold)">${stats[0].name}</b> (${trackDisplayName(currentTrackId)} 트랙)`;
+  $('leagueResult').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+    '<tr><th style="border:1px solid var(--line);padding:5px 8px">순위</th><th style="border:1px solid var(--line);padding:5px 8px">AI</th><th style="border:1px solid var(--line);padding:5px 8px">승</th><th style="border:1px solid var(--line);padding:5px 8px">무</th><th style="border:1px solid var(--line);padding:5px 8px">패</th><th style="border:1px solid var(--line);padding:5px 8px">승점</th><th style="border:1px solid var(--line);padding:5px 8px">총 진행</th></tr>' +
+    stats.map((s, i) => `<tr><td style="border:1px solid var(--line);padding:5px 8px">${i + 1}</td><td style="border:1px solid var(--line);padding:5px 8px;color:var(--gold)">${s.name}</td><td style="border:1px solid var(--line);padding:5px 8px">${s.w}</td><td style="border:1px solid var(--line);padding:5px 8px">${s.d}</td><td style="border:1px solid var(--line);padding:5px 8px">${s.l}</td><td style="border:1px solid var(--line);padding:5px 8px"><b>${s.pts}</b></td><td style="border:1px solid var(--line);padding:5px 8px">${s.prog.toFixed(1)}바퀴</td></tr>`).join('') +
+    '</table><p class="muted" style="margin-top:8px">결과는 📄 실험 리포트에도 포함됩니다.</p>';
+  $('btnLeagueRun').disabled = false;
+  note(`🏆 AI 리그 종료 — 우승: <b>${stats[0].name}</b> (참가 ${n}명, ${trackDisplayName(currentTrackId)})`, 'win');
+}
+
+/* ═══════════════════════ ⚗️ 알고리즘 벤치마크 ═══════════════════════ */
+const BENCH_CONFIGS = [
+  { key: 'vanilla', name: '기본 DQN', double: false, per: false, nstep: 1, color: '#9aa3b5' },
+  { key: 'double', name: '+ Double', double: true, per: false, nstep: 1, color: '#54a0ff' },
+  { key: 'per', name: '+ PER', double: true, per: true, nstep: 1, color: '#a29bfe' },
+  { key: 'full', name: '풀옵션 (+3-step)', double: true, per: true, nstep: 3, color: '#ff9f43' },
+];
+let lastBench = null, benchRunning = false;
+function makeTrainer(cfg, initJson, track, epsDecay) {
+  const T = {
+    net: new MLP(SIZES), tgt: new MLP(SIZES), rep: new Replay(20000, DIM),
+    env: createEnv(true), eps: 1, epsDecay, steps: 0, pend: [],
+    prev: new Float32Array(DIM), epLaps: [],
+  };
+  T.net.loadJSON(initJson);
+  T.net.resetOptim();
+  T.tgt.copyFrom(T.net);
+  if (cfg.per) T.rep.enablePER();
+  T.env.track = track;
+  T.env.reset(true);
+  return T;
+}
+function trainerStep(T, cfg) {
+  const e = T.env;
+  T.prev.set(e.state);
+  let a;
+  if (Math.random() < T.eps) a = (Math.random() * NA) | 0;
+  else a = argmax(T.net.forward(e.state));
+  const { r, done, truncated } = e.step(a);
+  pushNstep(T.rep, T.pend, T.prev, a, r, e.state, done, truncated, P.gamma, cfg.nstep);
+  T.steps++;
+  T.eps = Math.max(0.02, T.eps * T.epsDecay);
+  if (T.steps % TRAIN_EVERY === 0 && T.rep.n >= 600)
+    dqnTrainBatch(T.net, T.tgt, T.rep, { double: cfg.double, per: cfg.per, lr: P.lr });
+  if (T.steps % TARGET_SYNC === 0) T.tgt.copyFrom(T.net);
+  if (done || truncated) { T.epLaps.push(e.epProg / e.track.len); e.reset(true); }
+}
+async function runBenchmark(budget) {
+  if (benchRunning) return;
+  benchRunning = true;
+  $('btnBenchRun').disabled = true;
+  const initJson = new MLP(SIZES).toJSON(); // 4개 설정이 공유하는 초기 가중치
+  const epsDecay = Math.exp(Math.log(0.1) / (0.6 * budget)); // 예산 60% 지점에 ε≈0.1
+  lastBench = { budget, track: trackDisplayName(currentTrackId), curves: [] };
+  for (const cfg of BENCH_CONFIGS) {
+    const T = makeTrainer(cfg, initJson, env.track, epsDecay);
+    const points = [];
+    lastBench.curves.push({ name: cfg.name, color: cfg.color, points });
+    for (let s = 0; s < budget;) {
+      const chunk = Math.min(1000, budget - s);
+      for (let k = 0; k < chunk; k++) trainerStep(T, cfg);
+      s += chunk;
+      const tail = T.epLaps.slice(-15);
+      points.push({ step: s, laps: tail.length ? tail.reduce((x, y) => x + y, 0) / tail.length : 0 });
+      $('benchStatus').textContent = `⚗️ ${cfg.name} 학습 중… ${fmt(s)} / ${fmt(budget)} 스텝`;
+      drawBenchChart();
+      await new Promise(r => setTimeout(r, 0)); // UI 갱신 여유
+    }
+  }
+  // 실측 기반 결론
+  const firstLap = c => { const p = c.points.find(p => p.laps >= 1); return p ? p.step : null; };
+  const finals = lastBench.curves.map(c => ({ name: c.name, fin: c.points[c.points.length - 1].laps, first: firstLap(c) }));
+  const best = finals.reduce((a, b) => b.fin > a.fin ? b : a);
+  const base = finals[0], full = finals[finals.length - 1];
+  let concl = `최종 평균 주행 — ${finals.map(f => `${f.name}: ${f.fin.toFixed(2)}바퀴`).join(' · ')}. `;
+  concl += `이번 실행의 우승자는 <b>${best.name}</b>. `;
+  if (base.first && full.first) concl += `첫 완주 도달: 기본 DQN ${fmt(base.first)}스텝 vs 풀옵션 ${fmt(full.first)}스텝. `;
+  else if (!base.first && full.first) concl += `기본 DQN은 예산 내 완주 실패, 풀옵션은 ${fmt(full.first)}스텝에 완주 — 알고리즘 개선의 힘! `;
+  else if (!full.first) concl += `예산이 짧아 아직 완주 전 — 예산을 늘려 다시 비교해 보세요. `;
+  concl += `(같은 초기 가중치·트랙·예산으로 비교. 단, 1회 실행에는 운이 작용합니다 — 재실행하면 결과가 달라질 수 있고, 그것 자체가 RL의 분산입니다.)`;
+  lastBench.conclusion = concl;
+  $('benchConcl').innerHTML = '📌 ' + concl;
+  $('benchConcl').style.display = 'block';
+  $('benchStatus').textContent = '✅ 벤치마크 완료 — 결과는 📄 실험 리포트에 수록됩니다.';
+  unlock('scientist');
+  note('⚗️ 알고리즘 벤치마크 완료 — 우승: <b>' + best.name + '</b> (' + lastBench.track + ', 설정당 ' + fmt(budget) + '스텝)', 'win');
+  benchRunning = false;
+  $('btnBenchRun').disabled = false;
+}
+function drawBenchChart() {
+  const c = $('benchCanvas'), ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  if (!lastBench || !lastBench.curves.length) return;
+  let mx = 1;
+  lastBench.curves.forEach(cv => cv.points.forEach(p => { if (p.laps > mx) mx = p.laps; }));
+  const X = s => 40 + (w - 55) * s / lastBench.budget;
+  const Y = v => h - 22 - (h - 40) * v / mx;
+  ctx.strokeStyle = 'rgba(154,163,181,.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(40, 10, w - 55, h - 32);
+  if (mx >= 1) {
+    ctx.strokeStyle = 'rgba(46,204,113,.4)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(40, Y(1)); ctx.lineTo(w - 15, Y(1)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(46,204,113,.8)';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('1바퀴', 44, Y(1) - 4);
+  }
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#9aa3b5';
+  ctx.textAlign = 'left';
+  ctx.fillText('바퀴', 4, 20);
+  ctx.textAlign = 'right';
+  ctx.fillText(fmt(lastBench.budget) + ' 스텝', w - 15, h - 6);
+  lastBench.curves.forEach((cv, ci) => {
+    ctx.strokeStyle = cv.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    cv.points.forEach((p, i) => i === 0 ? ctx.moveTo(X(p.step), Y(p.laps)) : ctx.lineTo(X(p.step), Y(p.laps)));
+    ctx.stroke();
+    ctx.fillStyle = cv.color;
+    ctx.textAlign = 'left';
+    ctx.fillText(cv.name, 48, 24 + ci * 15);
+  });
+}
+
+/* ═══════════════════════ 트랙 편집 ═══════════════════════ */
+let drawing = false, drawPts = [];
+function canvasPos(ev) {
+  const r = mainC.getBoundingClientRect();
+  const cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+  const cy = (ev.touches ? ev.touches[0].clientY : ev.clientY) - r.top;
+  return [cx * CW / r.width, cy * CH / r.height];
+}
+function editDown(ev) {
+  if (mode !== 'edit') return;
+  ev.preventDefault();
+  drawing = true; drawPts = [canvasPos(ev)];
+}
+function editMove(ev) {
+  if (mode !== 'edit' || !drawing) return;
+  ev.preventDefault();
+  const p = canvasPos(ev);
+  const q = drawPts[drawPts.length - 1];
+  if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 9) drawPts.push(p);
+}
+function editUp() {
+  if (mode !== 'edit' || !drawing) return;
+  drawing = false;
+  let total = 0;
+  for (let i = 1; i < drawPts.length; i++)
+    total += Math.hypot(drawPts[i][0] - drawPts[i - 1][0], drawPts[i][1] - drawPts[i - 1][1]);
+  if (drawPts.length < 18 || total < 500) {
+    note('✏️ 트랙이 너무 짧아요 — 캔버스를 넓게 쓰는 큰 고리를 그려 주세요.', 'sys');
+    drawPts = [];
+    return;
+  }
+  applyNewTrack(drawPts, parseInt($('slWidth').value), 'custom');
+  drawPts = [];
+}
+function applyNewTrack(pts, width, id) {
+  const t = buildTrack(pts, width);
+  env.track = t;
+  currentTrackId = id;
+  renderTrackLayer();
+  if (id === 'custom') { lastCustomRaw = { p: pts.map(p => [Math.round(p[0]), Math.round(p[1])]), w: width }; unlock('designer'); }
+  replay.clear();
+  mainPend.length = 0;
+  trackSwitchEp = epCount;
+  env.reset(true);
+  $('stTrack').textContent = trackDisplayName(id);
+  document.querySelectorAll('.preset').forEach(b => b.classList.toggle('on', b.dataset.track === id));
+  $('btnDaily').classList.toggle('on', id.startsWith('daily-'));
+  renderRecords();
+  if (id === 'custom') {
+    note('🗺 <b>새 트랙 적용!</b> 학습된 가중치는 유지 — 처음 보는 트랙에서의 <b>일반화</b>를 관찰하세요. (경험 버퍼는 초기화)', 'win');
+    if (!botDrivable(t)) note('⚠️ 이 트랙, 상당히 어려워 보여요 — 통로가 좁거나 코너가 급하면 AI도 사람도 고전합니다. 그것도 실험!', 'sys');
+    setMode('train');
+    if (!running) toggleRun(true);
+  } else if (TRACKS[id]) {
+    note(`🗺 <b>${TRACKS[id].badge} ${TRACKS[id].name}</b> 트랙으로 변경했습니다. (경험 버퍼 초기화, 가중치 유지)`, 'sys');
+  } else if (id.startsWith('daily-')) {
+    note(`📅 <b>오늘의 트랙</b> (${id.slice(6)}) — 매일 자정에 새 서킷이 열립니다. 오늘의 기록에 도전하세요!`, 'win');
+  }
+}
+function trackCode() {
+  if (!lastCustomRaw) return null;
+  return btoa(unescape(encodeURIComponent(JSON.stringify(lastCustomRaw))));
+}
+function applyTrackCode(code) {
+  try {
+    const o = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+    if (!Array.isArray(o.p) || o.p.length < 10) throw new Error('bad');
+    applyNewTrack(o.p, clamp(o.w || 56, 40, 90), 'custom');
+    return true;
+  } catch (e) {
+    note('📥 트랙 코드를 읽을 수 없습니다 — 복사가 잘렸는지 확인해 주세요.', 'sys');
+    return false;
+  }
+}
+
+/* ═══════════════════════ 저장/불러오기 ═══════════════════════ */
+const SAVE_KEY = 'neurodrive.model.v1';
+function exportModel() {
+  return { v: 2, net: net.toJSON(), eps, stepCount, epCount, bestLaps };
+}
+function importModel(data) {
+  net.loadJSON(data.net);
+  net.resetOptim();
+  target.copyFrom(net);
+  eps = data.eps ?? 0.05;
+  stepCount = data.stepCount ?? 0;
+  epCount = data.epCount ?? 0;
+  bestLaps = data.bestLaps ?? 0;
+  epHistory = [];
+  lossAvg = 0;
+  replay.clear();
+  mainPend.length = 0;
+  trackSwitchEp = epCount;
+  env.reset(true);
+}
+function autoSave() { store(SAVE_KEY, exportModel()); }
+function manualLoad() {
+  const s = load(SAVE_KEY, null);
+  if (!s) { note('📂 저장된 모델이 없습니다.', 'sys'); return; }
+  try {
+    importModel(s);
+    note('📂 저장된 모델을 불러왔습니다. (EP ' + fmt(epCount) + ', ε=' + eps.toFixed(2) + ')', 'sys');
+  } catch (e) { note('📂 불러오기 실패: ' + e.message, 'sys'); }
+}
+function resetModel() {
+  net = new MLP(SIZES); target = new MLP(SIZES); target.copyFrom(net);
+  replay.clear();
+  mainPend.length = 0;
+  if (P.usePER) replay.enablePER();
+  eps = 1; stepCount = 0; epCount = 0; bestLaps = 0; lossAvg = 0; syncCount = 0;
+  epHistory = [];
+  Object.keys(milestones).forEach(k => milestones[k] = false);
+  trackSwitchEp = 0;
+  env.reset(true);
+  note('🗑 모델 초기화 — 백지 상태의 신경망에서 다시 시작합니다.', 'sys');
+  labEvent('reset');
+}
+function downloadModel() {
+  const blob = new Blob([JSON.stringify(exportModel())], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'neuro-drive-model.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  note('⬇ 모델을 파일로 내보냈습니다 — 친구에게 공유해 보세요!', 'sys');
+}
+
+/* 실험 리포트 — 학습 데이터로 제출용 문서 자동 생성 */
+function buildReport() {
+  const avg = avgLast(20);
+  const doneM = MISSIONS.filter(m => progress.missions.includes(m.id));
+  const doneL = LABS.filter(l => progress.labs[l.id] && progress.labs[l.id].done);
+  const trackName = trackDisplayName(currentTrackId);
+  const recRows = Object.entries(progress.records).map(([k, r]) =>
+    `<tr><td>${trackDisplayName(k)}</td><td>${r.p !== undefined ? r.p.toFixed(2) + 's' : '-'}</td><td>${r.a !== undefined ? r.a.toFixed(2) + 's' : '-'}</td></tr>`).join('') || '<tr><td colspan="3">기록 없음</td></tr>';
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>NEURO DRIVE 실험 리포트</title><style>
+  body{font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;max-width:780px;margin:40px auto;padding:0 20px;line-height:1.75;color:#1c2330}
+  h1{border-bottom:3px solid #ff9f43;padding-bottom:8px}h2{color:#e8842a;margin-top:28px}
+  table{width:100%;border-collapse:collapse;font-size:14px}th,td{border:1px solid #ccd;padding:7px 10px;text-align:left}th{background:#f5f0e8}
+  .box{background:#faf7f2;border-left:4px solid #a29bfe;border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0;font-size:14px}
+  .foot{color:#889;font-size:12px;margin-top:36px;border-top:1px solid #dde;padding-top:10px}
+  img{width:100%;border:1px solid #dde;border-radius:8px}@media print{body{margin:10mm}}
+  </style></head><body>
+  <h1>🏎️ NEURO DRIVE 실험 리포트</h1>
+  <p>생성일: ${new Date().toLocaleString('ko-KR')} · 순수 JavaScript로 구현한 Deep Q-Network 강화학습 실험 기록</p>
+  <h2>1. 학습 요약</h2>
+  <table>
+  <tr><th>총 학습 스텝</th><td>${fmt(stepCount)}</td><th>에피소드</th><td>${fmt(epCount)}</td></tr>
+  <tr><th>현재 트랙</th><td>${trackName}</td><th>탐험률 ε</th><td>${eps.toFixed(3)}</td></tr>
+  <tr><th>최근 20판 평균</th><td>${avg.toFixed(2)}바퀴</td><th>최고 기록</th><td>${bestLaps.toFixed(2)}바퀴</td></tr>
+  </table>
+  <h2>2. 학습 곡선 (에피소드당 주행 바퀴 수)</h2><img src="${chartC.toDataURL('image/png')}" alt="학습 곡선">
+  <h2>3. 신경망 상태 (8→16→16→5 DQN)</h2><img src="${netC.toDataURL('image/png')}" alt="신경망">
+  <h2>4. 완료한 실험 (${doneL.length}/${LABS.length})</h2>
+  ${doneL.map(l => `<div class="box"><b>${l.ic} ${l.title}</b> — ${l.sub}<br>📌 ${progress.labs[l.id].summary}<br><small>${l.why}</small></div>`).join('') || '<p>아직 완료한 실험이 없습니다 — 게임의 🔬 실험실에서 시작하세요.</p>'}
+  <h2>5. 도전과제 (${doneM.length}/${MISSIONS.length})</h2>
+  <p>${MISSIONS.map(m => (progress.missions.includes(m.id) ? '✅ ' : '⬜ ') + m.nm).join(' · ')}</p>
+  <h2>6. 레이스 랩 기록</h2>
+  <table><tr><th>트랙</th><th>플레이어 최고 랩</th><th>AI 최고 랩</th></tr>${recRows}</table>
+  ${lastLeague ? `<h2>7. AI 리그 결과 (${lastLeague.track} 트랙)</h2><table><tr><th>순위</th><th>AI</th><th>승</th><th>무</th><th>패</th><th>승점</th></tr>${lastLeague.standings.map((s, i) => `<tr><td>${i + 1}</td><td>${s.name}</td><td>${s.w}</td><td>${s.d}</td><td>${s.l}</td><td>${s.pts}</td></tr>`).join('')}</table>` : ''}
+  ${lastBench && lastBench.conclusion ? `<h2>8. 알고리즘 벤치마크 (${lastBench.track} · 설정당 ${fmt(lastBench.budget)}스텝)</h2><img src="${$('benchCanvas').toDataURL('image/png')}" alt="벤치마크 곡선"><div class="box">${lastBench.conclusion}</div>` : ''}
+  <p class="foot">본 리포트는 NEURO DRIVE(단일 HTML, 외부 라이브러리 없는 DQN 구현) 내 학습 데이터로 자동 생성되었습니다.</p>
+  </body></html>`;
+}
+function downloadReport() {
+  const blob = new Blob([buildReport()], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'neuro-drive-report.html';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('📄 리포트 저장 완료 — 브라우저로 열어 인쇄(PDF 저장)하세요');
+}
+
+/* 사전 학습 모델 — 이 게임 안에서 70,000스텝 학습시킨 가중치 (greedy 무충돌 완주) */
+const PRETRAINED = {"net":{"sizes":[8,16,16,5],"W":[[-0.81615,0.18542,-0.15084,0.14352,0.02594,-0.10806,-0.19578,-0.80834,-0.11765,0.07874,0.64619,0.5585,0.33207,-0.23215,0.42984,-0.47576,-0.47308,0.26667,0.82544,0.67867,0.9312,0.23101,0.05514,-0.11505,-0.48271,0.23293,0.5676,0.72899,0.6916,0.72976,0.00078,0.85933,-1.78791,-2.00599,-1.55348,-1.02509,-0.66856,0.77102,-0.10938,-0.11539,0.6505,-0.62796,-0.55037,-0.05642,-0.55962,-0.02932,-0.94433,-0.51538,-0.08963,0.58477,-0.15935,-0.33337,-0.19454,0.23265,0.10812,-0.77711,0.16692,-0.48604,-0.00789,-1.95855,0.08191,-0.33163,0.08233,0.46723,-0.18579,-0.78181,-0.29195,-0.36301,0.45657,0.02106,-0.26242,-0.26183,1.25469,-0.83714,0.13504,0.07093,-0.4089,0.28025,0.43893,0.06067,0.49357,-0.13534,0.28963,0.00519,0.20596,-1.4169,-0.53032,0.80849,-0.51177,-0.14562,0.25866,-0.16376,-0.58399,-0.04413,0.85915,-1.02828,-1.95611,-1.21959,-2.1412,-1.30848,-0.39183,0.18316,0.16787,0.42089,0.53746,-0.60765,0.31686,-0.51768,0.44989,0.18667,0.16593,-1.18817,-0.45568,0.61417,0.18985,0.2101,0.21179,-0.01,-0.00365,0.95119,0.20151,0.09356,-0.56886,-1.06321,0.22539,-0.0894,0.23549,-0.26881],[-0.12065,-0.14499,-0.14321,0.73069,-0.78364,-0.11573,0.03205,-1.4897,0.37081,0.72448,-0.00651,0.45536,-1.04394,-0.10758,0.00657,0.29229,-0.05325,0.09505,0.25389,0.52371,-0.23254,0.63705,0.01302,-1.17042,-0.23344,-0.04886,-0.24459,-0.1677,0.14802,-0.10118,0.72194,0.719,1.08083,-0.57819,-0.53745,-0.22076,1.27739,0.07074,-0.30523,1.08964,0.03765,-0.14087,-0.25255,-0.32915,2.02709,0.06181,-0.1934,-0.11263,0.04897,-0.26018,0.31809,-0.44694,-0.44663,0.20738,0.09081,-0.24691,0.08621,0.12518,-0.5968,-0.32343,-0.20313,-0.86301,0.06694,-0.23538,-0.49982,0.35921,0.59147,0.04889,0.81285,0.10587,-0.10153,0.64016,0.33986,0.40459,-0.74,-0.06379,0.87384,0.00866,0.1687,0.20502,-0.49459,0.34961,-1.29395,-0.21867,1.35635,-0.38356,-0.34739,1.47254,-0.41887,0.49826,0.44369,0.07817,1.93334,-0.26046,0.018,0.47098,-0.49694,0.5384,0.61476,0.03,-1.38713,0.08289,0.0106,-1.37731,0.34551,0.34312,-0.57687,0.73592,-0.99162,-0.17121,-0.18745,0.00137,0.55312,-0.25106,-0.01681,-0.27691,-0.15813,-0.28909,-0.06887,0.46081,0.17232,-0.15941,-0.10173,-0.30887,0.11039,0.2091,-0.32877,-0.44445,0.26947,-0.37597,0.27358,-0.12608,-0.63798,0.24955,0.54269,-1.26142,-0.37614,0.12778,0.21994,-0.26889,-1.2969,0.1627,0.68595,0.15122,0.51023,0.52016,0.26874,0.33636,0.95163,-0.45224,-0.02629,0.97184,-0.37541,-0.25297,0.0203,0.36696,1.53538,0.18592,-0.40474,-0.1427,-0.00396,-0.33908,-0.20561,0.81103,-0.44631,-0.12576,0.00061,-1.34537,-0.10097,0.21995,0.35528,0.17241,-0.43554,-0.33865,0.13727,0.17853,-0.00443,-0.14497,0.33076,0.19283,0.47982,0.02317,-0.39477,0.32758,-0.00935,0.04938,-0.44254,0.38408,0.46904,-0.2973,0.32019,0.3088,0.0142,-0.19267,0.03498,0.21603,-0.65174,0.27961,0.61716,1.34607,-0.19293,-0.05374,-0.99827,-0.07914,-0.51855,-0.23038,-0.26892,0.38505,0.03832,-0.05755,0.19991,0.17926,-0.54211,0.48052,0.0343,-1.20727,0.11773,0.64739,0.12561,-0.05474,-1.90049,-0.26862,0.22226,0.62042,-0.2199,-0.65459,0.00305,0.49764,-0.33867,0.0633,0.21195,-1.09308,-0.18483,-0.07209,0.51324,-0.32069,-0.9004,1.03363,0.8395,0.41407,-0.18285,-0.23584,-0.02304,-0.18189,1.10004,0.70653,-0.22006,1.64626,-0.29591,-0.11914,-0.55026,0.42984,1.84504,-0.39953,-0.0083,-0.18496],[0.11487,-0.03834,-0.71707,-0.78651,-0.46077,0.03978,1.02269,0.17635,0.60199,-0.88636,0.47957,-0.13066,-0.26695,0.8465,0.63342,-1.28495,0.68345,0.35321,-0.71717,0.1486,-0.87009,-0.71407,0.49468,0.08564,0.93668,-0.50273,0.20157,0.24643,-0.41292,0.60485,0.07377,-0.69439,0.66179,0.47821,-0.38727,0.09811,-0.22486,-1.32844,0.2645,0.27475,0.0422,-0.47593,0.44046,-0.501,-0.74606,0.15941,0.53242,-0.8711,0.38315,0.00086,-0.95632,-0.26571,0.06209,-1.60837,-0.41726,0.1946,-0.09853,-0.17821,0.37503,0.43436,-0.79092,0.84099,0.56407,-0.58973,0.52777,-0.03219,-2.11829,0.42173,0.46348,-1.13929,-0.60274,-0.17348,0.05526,-0.20825,0.76443,0.10615,-1.02463,0.22869,0.46649,-0.40921]],"b":[[0,-0.33384,-0.21985,0.31054,0.31977,0,-0.0297,0.24888,-0.07824,0.40338,0.46613,-0.07677,0.42268,0,0.29267,-0.02498],[0.44018,0.10681,0.30665,0.03957,-0.02292,0.15165,0.12189,-0.02816,0.25649,-0.20579,0.40728,-0.0242,0.01031,0.26187,0.53855,0.23333],[0.04776,0.24101,0.28317,0.42017,0.35914]]},"eps":0.02,"stepCount":70000,"epCount":172,"bestLaps":8.5};
+function loadPretrained() {
+  if (!PRETRAINED) return;
+  importModel(PRETRAINED);
+  eps = P.epsMin;
+  $('chkDemo').checked = true; demoMode = true;
+  note('🎓 사전 학습 모델 로드 — 시범 주행 모드로 관찰하세요. 🏁 대결도 가능!', 'win');
+  if (!running) toggleRun(true);
+}
+
+/* ═══════════════════════ 메인 루프 (60Hz 고정 타임스텝) ═══════════════════════ */
+function toggleRun(on) {
+  running = on === undefined ? !running : on;
+  $('btnRun').textContent = running ? '⏸ 일시정지' : '▶ 학습 시작';
+}
+let lastT = 0, acc = 0;
+const FIXED = 1000 / 60;
+function tick() {
+  if (mode === 'train' && running) {
+    if (demoMode) {
+      agentStep(true);
+      pushTrail(env.car);
+    } else {
+      const n = parseInt(speedSetting);
+      for (let k = 0; k < n; k++) agentStep(false);
+      pushTrail(env.car);
+    }
+  }
+  if (mode === 'race' && race.active) raceStep();
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!lastT) lastT = now;
+  acc += Math.min(120, now - lastT);
+  lastT = now;
+  if (mode === 'train' && running && !demoMode && speedSetting === 'max') {
+    acc = 0;
+    const t0 = performance.now();
+    while (performance.now() - t0 < 11) {
+      for (let k = 0; k < 40; k++) agentStep(false);
+    }
+    pushTrail(env.car);
+  } else {
+    let ticks = 0;
+    while (acc >= FIXED && ticks < 8) { acc -= FIXED; ticks++; tick(); }
+    if (ticks === 8) acc = 0; // 스파이럴 방지
+  }
+  if (attract.on) attractStep(); // 타이틀 어트랙트 모드
+  render();
+  // 엔진음
+  const activeCar = attract.on ? attract.car : (mode === 'race' && race.active ? race.player : env.car);
+  const moving = attract.on || (mode === 'train' && running) || (mode === 'race' && race.phase === 'run');
+  audio.engine(activeCar.speed / MAX_SPD, moving);
+}
+function render() {
+  const t = env.track;
+  if (!trackLayer) renderTrackLayer();
+  mctx.save();
+  if (shakeAmt > 0.3) { // 충돌 화면 흔들림
+    mctx.translate((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt);
+    shakeAmt *= 0.86;
+  } else shakeAmt = 0;
+  mctx.drawImage(trackLayer, 0, 0, CW, CH);
+  fadeSkid();
+  mctx.drawImage(skidLayer, 0, 0, CW, CH);
+  if (heatmapOn && mode === 'train') {
+    if (heatCounter++ % 45 === 0) computeHeatmap();
+    drawHeatmap(mctx);
+  }
+  if (mode === 'race' && race.active) {
+    addSkid(race.player);
+    addSkid(race.ai);
+    // 👻 고스트 재생 (내 최고 1랩)
+    const g = progress.ghosts[currentTrackId];
+    if (!race.spectate && g && race.phase === 'run') {
+      const gi = race.ticks >> 1;
+      if (gi < g.pts.length) {
+        const gp = g.pts[gi];
+        mctx.save();
+        mctx.globalAlpha = 0.35;
+        mctx.translate(gp[0], gp[1]);
+        mctx.rotate(gp[2]);
+        mctx.fillStyle = '#e8ecf4';
+        mctx.beginPath();
+        mctx.moveTo(9, 0); mctx.lineTo(-7, -5.5); mctx.lineTo(-4, 0); mctx.lineTo(-7, 5.5);
+        mctx.closePath(); mctx.fill();
+        mctx.restore();
+        mctx.globalAlpha = 1;
+      }
+    }
+    mctx.globalAlpha = race.ai.stun > 0 && (race.ai.stun >> 2) % 2 === 0 ? 0.25 : 1;
+    drawCar(mctx, race.ai, '#ff9f43', false);
+    mctx.globalAlpha = race.player.stun > 0 && (race.player.stun >> 2) % 2 === 0 ? 0.25 : 1;
+    drawCar(mctx, race.player, '#54a0ff', true);
+    mctx.globalAlpha = 1;
+  } else if (mode === 'edit') {
+    if (drawPts.length > 1) {
+      mctx.strokeStyle = '#feca57';
+      mctx.lineWidth = 3;
+      mctx.setLineDash([6, 6]);
+      mctx.beginPath();
+      mctx.moveTo(drawPts[0][0], drawPts[0][1]);
+      for (let i = 1; i < drawPts.length; i++) mctx.lineTo(drawPts[i][0], drawPts[i][1]);
+      mctx.stroke();
+      mctx.setLineDash([]);
+    }
+  } else {
+    if (attract.on) {
+      addSkid(attract.car);
+      drawCar(mctx, attract.car, '#ff9f43', true);
+    } else {
+      addSkid(env.car);
+      drawCar(mctx, env.car, '#ff9f43', true);
+    }
+  }
+  drawCrashFx(mctx);
+  mctx.restore();
+  drawHud();
+  drawNet();
+  drawChart();
+  updateStats();
+}
+
+/* 백그라운드 학습 (탭이 숨겨져도 진행) */
+let bgTimer = null, bgStartSteps = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (running && !demoMode && mode === 'train' && settings.bg) {
+      bgStartSteps = stepCount;
+      bgTimer = setInterval(() => {
+        const t0 = performance.now();
+        while (performance.now() - t0 < 150) {
+          for (let k = 0; k < 40; k++) agentStep(false);
+        }
+      }, 1000);
+    }
+  } else {
+    if (bgTimer) {
+      clearInterval(bgTimer); bgTimer = null;
+      const gained = stepCount - bgStartSteps;
+      if (gained > 0) note('🌙 백그라운드에서 ' + fmt(gained) + '스텝 학습했습니다.', 'sys');
+    }
+    lastT = 0; acc = 0;
+  }
+});
+window.addEventListener('beforeunload', () => { if (stepCount > 0) autoSave(); });
+
+/* ═══════════════════════ 이벤트 바인딩 ═══════════════════════ */
+function setMode(m) {
+  if (m === mode) return;
+  const leavingTrain = mode === 'train';
+  mode = m;
+  document.querySelectorAll('.tab[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('panelTrain').classList.toggle('hidden', m !== 'train');
+  $('panelEdit').classList.toggle('hidden', m !== 'edit');
+  $('panelRace').classList.toggle('hidden', m !== 'race');
+  $('editHint').style.display = m === 'edit' ? 'block' : 'none';
+  $('raceHud').style.display = 'none';
+  $('countdown').style.display = 'none';
+  $('touchBtns').style.display = 'none';
+  if (m !== 'race') { race.active = false; race.phase = 'idle'; }
+  if (m === 'race') renderRecords();
+  if (m === 'train') {
+    if (wasRunning) toggleRun(true);
+  } else if (leavingTrain) {
+    wasRunning = running;
+    toggleRun(false);
+  }
+}
+document.querySelectorAll('.tab[data-mode]').forEach(b =>
+  b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+$('btnRun').addEventListener('click', () => toggleRun());
+$('selSpeed').addEventListener('change', e => speedSetting = e.target.value);
+$('chkDemo').addEventListener('change', e => {
+  demoMode = e.target.checked;
+  if (demoMode) { env.reset(false); note('👀 시범 주행 — ε=0, 학습 정지. 순수하게 배운 정책만으로 달립니다.', 'sys'); }
+});
+
+$('slLr').addEventListener('input', e => {
+  P.lr = Math.pow(10, -4 + 2 * parseFloat(e.target.value));
+  $('labLr').textContent = P.lr.toFixed(4);
+});
+$('slGamma').addEventListener('input', e => {
+  P.gamma = parseFloat(e.target.value);
+  $('labGamma').textContent = P.gamma.toFixed(3);
+});
+$('slEps').addEventListener('input', e => {
+  const hl = parseInt(e.target.value) * 1000;
+  P.epsDecay = Math.exp(-Math.LN2 / hl);
+  epsHalfLife = hl;
+  $('labEps').textContent = (hl / 1000) + '천 스텝';
+});
+$('btnDefaults').addEventListener('click', () => {
+  $('slLr').value = 0.5; $('slGamma').value = 0.98; $('slEps').value = 8;
+  $('slRProg').value = 1; $('slRSpd').value = 0; $('slRCrash').value = 3;
+  ['slLr', 'slGamma', 'slEps', 'slRProg', 'slRSpd', 'slRCrash'].forEach(id =>
+    $(id).dispatchEvent(new Event('input')));
+  $('chkDouble').checked = true; P.useDouble = true;
+  $('chkPER').checked = false; P.usePER = false;
+  $('selNstep').value = '1'; P.nStep = 1; mainPend.length = 0;
+  $('chkSparse').checked = false; P.sparse = false;
+});
+$('slRProg').addEventListener('input', e => { P.rProg = parseFloat(e.target.value); $('labRProg').textContent = P.rProg.toFixed(1); });
+$('slRSpd').addEventListener('input', e => { P.rSpd = parseFloat(e.target.value); $('labRSpd').textContent = P.rSpd.toFixed(1); });
+$('slRCrash').addEventListener('input', e => { P.rCrash = parseFloat(e.target.value); $('labRCrash').textContent = P.rCrash.toFixed(1); });
+$('chkDouble').addEventListener('change', e => {
+  P.useDouble = e.target.checked;
+  note(P.useDouble ? '✅ Double DQN 켜짐 — 행동 선택과 평가를 분리해 Q값 과대평가를 막습니다.' : '⚠️ Double DQN 꺼짐 — 고전 DQN은 Q값을 과대평가하는 경향이 있습니다. 학습 곡선으로 비교해 보세요!', 'sys');
+});
+$('chkPER').addEventListener('change', e => {
+  P.usePER = e.target.checked;
+  if (P.usePER) {
+    replay.enablePER();
+    note('🎯 PER 켜짐 — TD 오차가 큰 "중요한 실수"를 더 자주 복습합니다 (sum-tree 우선순위 샘플링).', 'sys');
+  } else note('PER 꺼짐 — 균등 무작위 샘플링으로 돌아갑니다.', 'sys');
+});
+$('selNstep').addEventListener('change', e => {
+  P.nStep = parseInt(e.target.value);
+  mainPend.length = 0;
+  note('⛓ ' + P.nStep + '-step 리턴 — 보상 신호가 ' + (P.nStep === 1 ? '한 스텝씩' : P.nStep + '스텝 묶음으로') + ' 전파됩니다.', 'sys');
+});
+$('chkSparse').addEventListener('change', e => {
+  P.sparse = e.target.checked;
+  note(P.sparse
+    ? '🌵 <b>희소 보상 모드</b> — 이제 1/5바퀴 체크포인트에서만 보상이 나옵니다. 학습이 얼마나 느려지는지 관찰하세요. (n-step을 켜면 도움이 됩니다!)'
+    : '💧 밀집 보상으로 복귀 — 매 스텝 전진량만큼 보상을 받습니다.', 'sys');
+});
+$('slWidth').addEventListener('input', e => $('labWidth').textContent = e.target.value + 'px');
+
+$('btnSave').addEventListener('click', () => {
+  if (autoSave() === false) note('💾 저장 실패 — 브라우저 저장 공간을 확인해 주세요.', 'sys');
+  else note('💾 모델 저장 완료 (브라우저 localStorage)', 'sys');
+});
+$('btnLoad').addEventListener('click', manualLoad);
+$('btnReset').addEventListener('click', () => { if (confirm('신경망을 백지로 초기화할까요?')) resetModel(); });
+$('btnExport').addEventListener('click', downloadModel);
+$('btnImport').addEventListener('click', () => $('fileImport').click());
+$('fileImport').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      importModel(JSON.parse(r.result));
+      note('⬆ 모델 파일을 불러왔습니다. (EP ' + fmt(epCount) + ')', 'win');
+    } catch (err) { note('⬆ 가져오기 실패: ' + err.message, 'sys'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+});
+$('btnPretrained').addEventListener('click', loadPretrained);
+
+document.querySelectorAll('.preset').forEach(b =>
+  b.addEventListener('click', () => {
+    const id = b.dataset.track;
+    if (!id) return; // 오늘의 트랙 버튼은 별도 처리
+    applyNewTrack(TRACKS[id].pts, TRACKS[id].width, id);
+  }));
+$('btnDaily').addEventListener('click', () => {
+  const d = dailyTrack();
+  applyNewTrack(d.pts, d.width, 'daily-' + d.key);
+});
+$('btnTrackCopy').addEventListener('click', () => {
+  const c = trackCode();
+  if (!c) { note('📤 아직 그린 트랙이 없습니다 — 먼저 트랙을 그려 주세요.', 'sys'); return; }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(c).then(() => toast('📤 트랙 코드를 복사했습니다 — 친구에게 보내 보세요!'));
+  } else prompt('트랙 코드 (복사하세요)', c);
+});
+$('btnTrackPaste').addEventListener('click', () => {
+  const c = prompt('공유받은 트랙 코드를 붙여넣으세요');
+  if (c && applyTrackCode(c)) toast('📥 트랙을 불러왔습니다!');
+});
+
+mainC.addEventListener('mousedown', editDown);
+mainC.addEventListener('mousemove', editMove);
+window.addEventListener('mouseup', editUp);
+mainC.addEventListener('touchstart', editDown, { passive: false });
+mainC.addEventListener('touchmove', editMove, { passive: false });
+mainC.addEventListener('touchend', editUp);
+
+$('btnRace').addEventListener('click', () => { race.spectate = false; startRace(); });
+$('btnRaceVsChamp').addEventListener('click', () => startRaceVs(PRETRAINED, '챔피언'));
+$('btnRaceVsFile').addEventListener('click', () => $('fileRival').click());
+$('fileRival').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try { startRaceVs(JSON.parse(r.result), f.name.replace(/\.json$/i, '').slice(0, 12) || '상대 AI'); }
+    catch (err) { note('🤖 상대 모델 파일 오류: ' + err.message, 'sys'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+});
+$('btnRaceClose').addEventListener('click', () => {
+  $('raceOverlay').classList.add('hidden');
+  race.active = false;
+  race.phase = 'idle';
+});
+window.addEventListener('keydown', e => {
+  if (mode === 'race') {
+    race.keys[e.code] = true;
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
+  }
+});
+window.addEventListener('keyup', e => { race.keys[e.code] = false; });
+// 모바일 터치 조향
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+for (const [id, key] of [['tLeft', 'tL'], ['tRight', 'tR']]) {
+  const el = $(id);
+  const on = ev => { ev.preventDefault(); race.keys[key] = true; };
+  const off = ev => { ev.preventDefault(); race.keys[key] = false; };
+  el.addEventListener('touchstart', on, { passive: false });
+  el.addEventListener('touchend', off, { passive: false });
+  el.addEventListener('touchcancel', off, { passive: false });
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+}
+
+$('btnGlossary').addEventListener('click', () => $('glossaryOverlay').classList.remove('hidden'));
+$('btnCloseGlossary').addEventListener('click', () => $('glossaryOverlay').classList.add('hidden'));
+$('btnMissions').addEventListener('click', () => { renderMissions(); $('missionsOverlay').classList.remove('hidden'); });
+$('btnCloseMissions').addEventListener('click', () => $('missionsOverlay').classList.add('hidden'));
+$('btnLabs').addEventListener('click', () => { renderLabs(); $('labsOverlay').classList.remove('hidden'); });
+$('btnCloseLabs').addEventListener('click', () => $('labsOverlay').classList.add('hidden'));
+$('btnLabStop').addEventListener('click', stopLab);
+$('btnLabDoneClose').addEventListener('click', () => $('labDoneOverlay').classList.add('hidden'));
+$('btnReport').addEventListener('click', downloadReport);
+$('btnReport2').addEventListener('click', downloadReport);
+$('chkHeat').addEventListener('change', e => {
+  heatmapOn = e.target.checked;
+  $('heatHint').classList.toggle('hidden', !heatmapOn);
+  if (heatmapOn) { heatCache = null; heatCounter = 0; }
+});
+$('btnSettings').addEventListener('click', () => $('settingsOverlay').classList.remove('hidden'));
+$('btnCloseSettings').addEventListener('click', () => $('settingsOverlay').classList.add('hidden'));
+function syncSoundUI() {
+  $('btnSound').textContent = settings.sound ? '🔊' : '🔇';
+  $('swSound').checked = settings.sound;
+}
+$('btnSound').addEventListener('click', () => { settings.sound = !settings.sound; saveSettings(); syncSoundUI(); });
+$('swSound').addEventListener('change', e => { settings.sound = e.target.checked; saveSettings(); syncSoundUI(); });
+$('swBg').addEventListener('change', e => { settings.bg = e.target.checked; saveSettings(); });
+$('swMusic').addEventListener('change', e => { settings.music = e.target.checked; saveSettings(); });
+$('btnWipe').addEventListener('click', () => {
+  if (!confirm('모델·랩 기록·도전과제를 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem('neurodrive.progress.v1');
+    localStorage.removeItem('neurodrive.settings.v1');
+  } catch (e) {}
+  location.reload();
+});
+
+$('btnStart').addEventListener('click', () => {
+  audio.init(); audio.resume();
+  attract.on = false;
+  $('introOverlay').classList.add('hidden');
+  toggleRun(true);
+  if (!settings.tourDone) setTimeout(startTour, 400);
+});
+// 🏆 AI 리그
+$('btnLeague').addEventListener('click', () => {
+  leagueInit();
+  $('leagueResult').innerHTML = '';
+  $('leagueStatus').textContent = '';
+  $('leagueOverlay').classList.remove('hidden');
+});
+$('btnCloseLeague').addEventListener('click', () => $('leagueOverlay').classList.add('hidden'));
+$('btnLeagueAdd').addEventListener('click', () => $('fileLeague').click());
+$('fileLeague').addEventListener('change', e => {
+  for (const f of e.target.files) {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const j = JSON.parse(r.result);
+        const m = new MLP(SIZES);
+        m.loadJSON(j.net || j);
+        leagueEntries.push({ name: f.name.replace(/\.json$/i, '').slice(0, 14), net: m, removable: true });
+        renderLeague();
+      } catch (err) { toast('⚠️ ' + f.name + ' 읽기 실패 — 모델 파일이 맞나요?'); }
+    };
+    r.readAsText(f);
+  }
+  e.target.value = '';
+});
+$('btnLeagueRun').addEventListener('click', runLeague);
+// ⚗️ 알고리즘 벤치마크
+$('btnBench').addEventListener('click', () => {
+  $('benchTrack').textContent = trackDisplayName(currentTrackId);
+  drawBenchChart();
+  $('benchOverlay').classList.remove('hidden');
+});
+$('btnCloseBench').addEventListener('click', () => $('benchOverlay').classList.add('hidden'));
+$('btnBenchRun').addEventListener('click', () => runBenchmark(parseInt($('selBenchBudget').value)));
+$('leagueList').addEventListener('click', e => {
+  const rm = e.target.dataset.rm;
+  if (rm !== undefined) { leagueEntries.splice(+rm, 1); renderLeague(); }
+});
+$('btnStartPretrained').addEventListener('click', () => {
+  audio.init(); audio.resume();
+  attract.on = false;
+  $('introOverlay').classList.add('hidden');
+  loadPretrained();
+});
+document.addEventListener('pointerdown', () => { audio.init(); audio.resume(); }, { once: true });
+
+/* ═══════════════════════ 🚀 온보딩 투어 ═══════════════════════ */
+const TOUR = [
+  { sel: '#btnRun', t: '▶ 학습 시작', d: '누르는 순간 신경망이 수만 번 충돌하며 스스로 배웁니다. (단축키 Space)' },
+  { sel: '#selSpeed', t: '학습 속도', d: 'MAX로 두면 1~2분 만에 완주 수준이 됩니다.' },
+  { sel: '#chartCanvas', t: '학습 곡선', d: '실력이 오르는 순간을 눈으로 확인하세요. 🗺 가치 지도(H키)도 켜 보세요!' },
+  { sel: '#btnLabs', t: '🔬 실험실', d: '보상 해킹, 일반화… 현실 AI 문제 5가지를 실험하고 리포트로 남기세요.' },
+  { sel: '.tab[data-mode="race"]', t: '🏁 대결', d: '충분히 컸다면 당신의 AI와 승부하세요. 친구 AI와 🏆 리그전도!' },
+];
+let tourIdx = -1;
+function startTour() { tourIdx = 0; showTourStep(); }
+function endTour() {
+  tourIdx = -1;
+  $('tourSpot').classList.add('hidden');
+  $('tourCard').classList.add('hidden');
+  settings.tourDone = true;
+  saveSettings();
+}
+function positionTourStep() {
+  if (tourIdx < 0 || tourIdx >= TOUR.length) return;
+  const step = TOUR[tourIdx];
+  const el = document.querySelector(step.sel);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const spot = $('tourSpot'), card = $('tourCard');
+  spot.style.left = (r.left - 6) + 'px';
+  spot.style.top = (r.top - 6) + 'px';
+  spot.style.width = (r.width + 12) + 'px';
+  spot.style.height = (r.height + 12) + 'px';
+  $('tourTitle').textContent = `${step.t} (${tourIdx + 1}/${TOUR.length})`;
+  $('tourDesc').textContent = step.d;
+  $('tourNext').textContent = tourIdx === TOUR.length - 1 ? '시작하기!' : '다음';
+  const cw = 300, ch = 130;
+  const cx = clamp(r.left, 10, window.innerWidth - cw - 10);
+  let cy = r.bottom + 14;
+  if (cy + ch > window.innerHeight - 10) cy = r.top - ch - 14;
+  card.style.left = cx + 'px';
+  card.style.top = Math.max(10, cy) + 'px';
+}
+function showTourStep() {
+  if (tourIdx < 0 || tourIdx >= TOUR.length) return endTour();
+  const el = document.querySelector(TOUR[tourIdx].sel);
+  if (!el) { tourIdx++; return showTourStep(); }
+  const spot = $('tourSpot');
+  const firstShow = spot.classList.contains('hidden');
+  spot.classList.remove('hidden');
+  $('tourCard').classList.remove('hidden');
+  el.scrollIntoView({ block: 'center' });
+  if (firstShow) { // 첫 등장은 무전환 배치 (엉뚱한 곳에서 날아오지 않게)
+    spot.style.transition = 'none';
+    positionTourStep();
+    void spot.offsetWidth;
+    spot.style.transition = '';
+  } else positionTourStep();
+  setTimeout(positionTourStep, 80); // 스크롤 정착 후 좌표 보정
+}
+window.addEventListener('scroll', () => { if (tourIdx >= 0) positionTourStep(); }, true);
+window.addEventListener('resize', () => { if (tourIdx >= 0) positionTourStep(); });
+$('tourNext').addEventListener('click', () => { tourIdx++; showTourStep(); });
+$('tourSkip').addEventListener('click', endTour);
+$('btnTourAgain').addEventListener('click', () => {
+  $('settingsOverlay').classList.add('hidden');
+  setMode('train');
+  startTour();
+});
+
+/* ⌨️ 단축키 */
+window.addEventListener('keydown', e => {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+  if (tourIdx >= 0 || document.querySelector('.overlay:not(.hidden)')) return;
+  if (mode !== 'train') return;
+  if (e.code === 'Space') { e.preventDefault(); toggleRun(); }
+  else if (e.code === 'KeyD') { const c = $('chkDemo'); c.checked = !c.checked; c.dispatchEvent(new Event('change')); }
+  else if (e.code === 'KeyH') { const c = $('chkHeat'); c.checked = !c.checked; c.dispatchEvent(new Event('change')); }
+});
+
+/* 🧯 전역 오류 보호: 오류 시 자동 일시정지 + 자동 저장 */
+let lastErrNote = 0;
+function onAppError(msg) {
+  try {
+    toggleRun(false);
+    autoSave();
+    const now = performance.now();
+    if (now - lastErrNote > 3000) {
+      lastErrNote = now;
+      toast('⚠️ 오류가 발생해 학습을 일시정지했습니다 (모델은 자동 저장됨)');
+      note('⚠️ 오류: ' + String(msg).slice(0, 160), 'sys');
+    }
+  } catch (e) { /* 오류 처리 중 오류는 무시 */ }
+}
+window.addEventListener('error', e => onAppError(e.message));
+window.addEventListener('unhandledrejection', e => onAppError((e.reason && e.reason.message) || e.reason));
+
+/* 📦 PWA: 오프라인 캐시 + 홈 화면 설치 (배포 환경에서만) */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+/* ═══════════════════════ 자가 진단 (?selftest) ═══════════════════════ */
+function selftest() {
+  const results = {};
+  try {
+    // 1) 신경망: 고정 타깃 회귀에서 손실 감소
+    const n1 = new MLP([8, 16, 16, 5]);
+    const xs = new Float32Array(8 * 8).map(() => Math.random());
+    const as = new Uint8Array(8).map(() => (Math.random() * 5) | 0);
+    const ys = new Float32Array(8).map(() => Math.random() * 2 - 1);
+    const l0 = n1.trainBatch(xs, 8, as, ys, 8, 0.003);
+    let lN = l0;
+    for (let i = 0; i < 300; i++) lN = n1.trainBatch(xs, 8, as, ys, 8, 0.003);
+    results.nnLearns = lN < l0 * 0.5;
+    // 2) 트랙: 모든 프리셋 빌드 + 진행도 왕복
+    results.tracks = Object.keys(TRACKS).every(id => {
+      const t = buildTrack(TRACKS[id].pts, TRACKS[id].width);
+      const pr = projectProgress(t, t.pts[5][0], t.pts[5][1], 5);
+      return t.len > 800 && t.segs.length > 50 && Math.abs(pr.s - t.cum[5]) < 15;
+    });
+    // 3) 리플레이 버퍼 왕복
+    const rp = new Replay(4, 8);
+    const s = new Float32Array(8).fill(0.5);
+    for (let i = 0; i < 6; i++) rp.push(s, i % 5, i, s, 0);
+    results.replay = rp.n === 4 && rp.i === 2;
+    // 4) 저장/복원 왕복 (가중치 일치)
+    const before = net.toJSON();
+    const n2 = new MLP(SIZES);
+    n2.loadJSON(before);
+    results.saveLoad = Math.abs(n2.W[0][3] - net.W[0][3]) < 1e-4;
+    // 5) 환경: 무작위 50스텝 NaN 없음
+    env.reset(true);
+    let ok = true;
+    for (let i = 0; i < 50; i++) {
+      const r = env.step((Math.random() * NA) | 0);
+      if (!isFinite(r.r) || !isFinite(env.car.x)) { ok = false; break; }
+      if (r.done) env.reset(true);
+    }
+    env.reset(true);
+    results.env = ok;
+    // 6) PER: 우선순위 비례 샘플링 편향 확인
+    const rp2 = new Replay(8, 8);
+    rp2.enablePER();
+    for (let i = 0; i < 8; i++) rp2.push(s, 0, 0, s, 0, 0.98);
+    rp2.setPrio(3, 50); // 3번 항목에 큰 TD 오차
+    let hit3 = 0;
+    for (let i = 0; i < 300; i++) if (rp2.samplePER() === 3) hit3++;
+    results.per = hit3 > 120; // 균등이라면 기대값 37.5회
+  } catch (e) { results.error = e.message; }
+  results.pass = Object.entries(results).every(([k, v]) => k === 'pass' || v === true);
+  console.table(results);
+  window.__selftest = results;
+  return results;
+}
+
+/* ═══════════════════════ 초기화 ═══════════════════════ */
+env.track = buildTrack(TRACKS.classic.pts, TRACKS.classic.width);
+env.reset(true);
+fitCanvases();
+renderTrackLayer();
+startAttract();
+syncSoundUI();
+$('swBg').checked = settings.bg;
+$('swMusic').checked = settings.music;
+if (PRETRAINED) {
+  $('btnPretrained').classList.remove('hidden');
+  $('btnStartPretrained').classList.remove('hidden');
+}
+note('🏎️ 준비 완료 — 신경망은 아직 아무것도 모릅니다. 학습을 시작해 보세요!', 'sys');
+if (location.search.includes('selftest')) selftest();
+requestAnimationFrame(frame);
+
+/* 개발/검증용 API */
+window.ND = {
+  trainSteps(n) { for (let i = 0; i < n; i++) agentStep(false); return this.stats(); },
+  stats() {
+    const last = epHistory.slice(-20);
+    const avg = last.length ? last.reduce((a, e) => a + e.laps, 0) / last.length : 0;
+    return { ep: epCount, steps: stepCount, eps: +eps.toFixed(3), avgLaps20: +avg.toFixed(3), best: +bestLaps.toFixed(3), buf: replay.n, loss: +lossAvg.toFixed(4) };
+  },
+  exportModel, importModel, env, selftest, unlock, progress,
+  applyPreset(id) { applyNewTrack(TRACKS[id].pts, TRACKS[id].width, id); },
+  startLab, stopLab, LABS, buildReport, startRaceVs, computeHeatmap,
+  dailyTrack, simulateMatch, leagueInit, runLeague, startTour, applyNewTrack,
+  runBenchmark, BENCH_CONFIGS, P,
+  get lastBench() { return lastBench; },
+  get leagueEntries() { return leagueEntries; },
+  get lastLeague() { return lastLeague; },
+  get labState() { return labState; },
+  get activeLab() { return activeLab; },
+  get net() { return net; },
+};
+</script>
+</body>
+</html>

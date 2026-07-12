@@ -1,0 +1,13 @@
+{
+  "name": "NEURO DRIVE — AI 리터러시 실험실",
+  "short_name": "NEURO DRIVE",
+  "description": "신경망이 눈앞에서 운전을 배우는 강화학습 교육 게임. 순수 JS로 구현한 DQN — 훈련하고, 실험하고, 대결하세요.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#12141a",
+  "theme_color": "#12141a",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
