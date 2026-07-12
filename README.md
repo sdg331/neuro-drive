@@ -1,5 +1,7 @@
 # 🏎️ NEURO DRIVE — 보고, 실험하고, 대결하는 AI 리터러시 실험실
 
+### 🎮 지금 플레이: **[sdg331.github.io/neuro-drive](https://sdg331.github.io/neuro-drive/)**
+
 **Deep Q-Network(DQN)를 외부 라이브러리 없이 순수 JavaScript로 완전 구현한 강화학습 교육 게임.**
 
 `index.html` 파일 하나로 동작합니다. 브라우저에서 열면 바로 실행됩니다 (인터넷·설치 불필요, 모바일 지원).
